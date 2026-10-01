@@ -709,7 +709,16 @@ app.post('/api/terminal', (req, res) => {
   }
 });
 
-// Start Server
-app.listen(PORT, HOST, () => {
-  console.log(`ServerPath Explorer running on http://${HOST}:${PORT} (process.env.PORT=${process.env.PORT || 'default 4000'})`);
+// Explicit root route
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+// Start Server
+if (require.main === module || !process.env.VERCEL) {
+  app.listen(PORT, HOST, () => {
+    console.log(`ServerPath Explorer running on http://${HOST}:${PORT} (process.env.PORT=${process.env.PORT || 'default 4000'})`);
+  });
+}
+
+module.exports = app;
