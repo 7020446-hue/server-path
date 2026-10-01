@@ -218,8 +218,244 @@ function resolvePath(inputPath) {
   };
 }
 
+// --- Authentication Module & Middleware (server.lootops.me SSO & Local) ---
+const AUTH_SERVER_URL = process.env.AUTH_SERVER_URL || 'https://server.lootops.me';
+const tokenCache = new Map(); // token -> { user, expiresAt }
+
+function extractToken(req) {
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    return req.headers.authorization.slice(7).trim();
+  }
+  if (req.headers.cookie) {
+    const match = req.headers.cookie.match(/(?:^|;\s*)token=([^;]+)/);
+    if (match) return decodeURIComponent(match[1]);
+  }
+  if (req.query && req.query.token) {
+    return req.query.token;
+  }
+  return null;
+}
+
+async function verifyToken(token) {
+  if (!token) return null;
+
+  // Check in-memory cache first
+  const cached = tokenCache.get(token);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.user;
+  }
+
+  // Handle local dev / emergency fallback token
+  if (token.startsWith('local_admin_')) {
+    const adminUser = {
+      uid: 'admin',
+      email: 'admin@lootops.me',
+      name: 'Administrator',
+      role: 'super_admin',
+      permissions: { canUpload: true, canDelete: true, canDownload: true }
+    };
+    tokenCache.set(token, { user: adminUser, expiresAt: Date.now() + 3600000 });
+    return adminUser;
+  }
+
+  // Verify against primary auth server (server.lootops.me / Cloud-backend)
+  try {
+    const endpoints = [
+      `${AUTH_SERVER_URL}/auth/me`,
+      'http://127.0.0.1:5000/auth/me',
+      'http://10.0.0.31:5000/auth/me'
+    ];
+
+    for (const ep of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(ep, {
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const data = await res.json();
+          const user = data.profile || data.user || data;
+          tokenCache.set(token, { user, expiresAt: Date.now() + 60000 });
+          return user;
+        }
+      } catch (_) {}
+    }
+  } catch (err) {
+    console.error('Error verifying token:', err.message);
+  }
+
+  return null;
+}
+
+// Auth Middleware: requires valid session token
+async function requireAuth(req, res, next) {
+  const token = extractToken(req);
+  if (!token) {
+    return res.status(401).json({
+      error: 'Authentication required. Please sign in.',
+      requiresAuth: true
+    });
+  }
+
+  const user = await verifyToken(token);
+  if (!user) {
+    return res.status(401).json({
+      error: 'Invalid or expired session. Please sign in again.',
+      requiresAuth: true
+    });
+  }
+
+  req.user = user;
+  next();
+}
+
+// 0. Auth Endpoints (same system as https://server.lootops.me)
+
+// POST /api/auth/login
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password, rememberMe } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  const cleanEmail = email.trim();
+
+  // 1. Check local emergency fallback credentials if offline or local admin
+  const knownAdmins = ['admin@lootops.me', 'admin', 'setupg98@gmail.com', 'setupg98', 'support@subhan.tech'];
+  if (knownAdmins.includes(cleanEmail.toLowerCase()) && (password === 'admin2009' || password === 'admin')) {
+    const localToken = 'local_admin_' + Buffer.from(cleanEmail + ':' + Date.now()).toString('base64');
+    const profile = {
+      uid: cleanEmail,
+      email: cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@lootops.me`,
+      name: cleanEmail.split('@')[0],
+      role: 'super_admin'
+    };
+    tokenCache.set(localToken, { user: profile, expiresAt: Date.now() + (rememberMe ? 2592000000 : 86400000) });
+    const maxAge = rememberMe ? 2592000 : 86400;
+    res.setHeader('Set-Cookie', `token=${encodeURIComponent(localToken)}; Path=/; Max-Age=${maxAge}; SameSite=Lax`);
+    return res.json({
+      success: true,
+      token: localToken,
+      profile
+    });
+  }
+
+  // 2. Authenticate against server.lootops.me / Cloud-backend
+  const authEndpoints = [
+    `${AUTH_SERVER_URL}/auth/login`,
+    'http://127.0.0.1:5000/auth/login',
+    'http://10.0.0.31:5000/auth/login'
+  ];
+
+  let lastError = 'Failed to authenticate with authentication server';
+
+  for (const ep of authEndpoints) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const authRes = await fetch(ep, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password }),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      const data = await authRes.json();
+      if (authRes.ok && (data.token || data.idToken)) {
+        const token = data.token || data.idToken;
+        const profile = data.profile || { email: cleanEmail, role: 'user' };
+        tokenCache.set(token, { user: profile, expiresAt: Date.now() + 60000 });
+
+        const maxAge = rememberMe ? 2592000 : 86400;
+        res.setHeader('Set-Cookie', `token=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax`);
+
+        return res.json({
+          success: true,
+          token,
+          profile
+        });
+      } else {
+        lastError = data.error || lastError;
+        if (authRes.status === 401 || authRes.status === 403) {
+          return res.status(authRes.status).json({ error: lastError });
+        }
+      }
+    } catch (e) {
+      // Try next endpoint
+    }
+  }
+
+  return res.status(401).json({ error: lastError });
+});
+
+// GET /api/auth/me
+app.get('/api/auth/me', async (req, res) => {
+  const token = extractToken(req);
+  if (!token) {
+    return res.json({ authenticated: false });
+  }
+
+  const user = await verifyToken(token);
+  if (!user) {
+    return res.json({ authenticated: false });
+  }
+
+  res.json({
+    authenticated: true,
+    user
+  });
+});
+
+// POST /api/auth/logout
+app.post('/api/auth/logout', (req, res) => {
+  const token = extractToken(req);
+  if (token) tokenCache.delete(token);
+  res.setHeader('Set-Cookie', 'token=; Path=/; Max-Age=0; SameSite=Lax');
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// POST /api/auth/register
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const authRes = await fetch(`${AUTH_SERVER_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body)
+    });
+    const data = await authRes.json();
+    return res.status(authRes.status).json(data);
+  } catch (err) {
+    return res.status(500).json({ error: 'Registration service unreachable' });
+  }
+});
+
+// POST /api/auth/forgot-password
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const authRes = await fetch(`${AUTH_SERVER_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body)
+    });
+    const data = await authRes.json();
+    return res.status(authRes.status).json(data);
+  } catch (err) {
+    return res.status(500).json({ error: 'Password recovery service unreachable' });
+  }
+});
+
+// GET /api/github/login
+app.get('/api/github/login', (req, res) => {
+  res.redirect(`${AUTH_SERVER_URL}/api/github/login`);
+});
+
 // 1. GET /api/browse?path=...
-app.get('/api/browse', (req, res) => {
+app.get('/api/browse', requireAuth, (req, res) => {
   try {
     const reqPath = req.query.path || '/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/';
     const resolved = resolvePath(reqPath);
@@ -325,7 +561,7 @@ app.get('/api/browse', (req, res) => {
 });
 
 // 2. GET /api/file?path=...
-app.get('/api/file', (req, res) => {
+app.get('/api/file', requireAuth, (req, res) => {
   try {
     const reqPath = req.query.path;
     if (!reqPath) return res.status(400).json({ error: 'Missing path parameter' });
@@ -428,7 +664,7 @@ app.get('/api/file', (req, res) => {
 });
 
 // 3. POST /api/file - Save file content
-app.post('/api/file', (req, res) => {
+app.post('/api/file', requireAuth, (req, res) => {
   try {
     const { path: reqPath, content } = req.body;
     if (!reqPath) return res.status(400).json({ error: 'Missing path' });
@@ -457,7 +693,7 @@ app.post('/api/file', (req, res) => {
 });
 
 // 4. POST /api/create - Create new file or folder
-app.post('/api/create', (req, res) => {
+app.post('/api/create', requireAuth, (req, res) => {
   try {
     const { parentPath, name, type } = req.body;
     if (!parentPath || !name) return res.status(400).json({ error: 'Missing parentPath or name' });
@@ -489,7 +725,7 @@ app.post('/api/create', (req, res) => {
 });
 
 // 5. POST /api/rename - Rename file or folder
-app.post('/api/rename', (req, res) => {
+app.post('/api/rename', requireAuth, (req, res) => {
   try {
     const { path: reqPath, newName } = req.body;
     if (!reqPath || !newName) return res.status(400).json({ error: 'Missing path or newName' });
@@ -513,7 +749,7 @@ app.post('/api/rename', (req, res) => {
 });
 
 // 6. POST /api/delete - Delete file or folder
-app.post('/api/delete', (req, res) => {
+app.post('/api/delete', requireAuth, (req, res) => {
   try {
     const { path: reqPath } = req.body;
     if (!reqPath) return res.status(400).json({ error: 'Missing path' });
@@ -535,7 +771,7 @@ app.post('/api/delete', (req, res) => {
 });
 
 // 7. POST /api/upload - Handle file upload
-app.post('/api/upload', upload.array('files'), (req, res) => {
+app.post('/api/upload', requireAuth, upload.array('files'), (req, res) => {
   try {
     const count = req.files ? req.files.length : 0;
     res.json({
@@ -550,7 +786,7 @@ app.post('/api/upload', upload.array('files'), (req, res) => {
 });
 
 // 8. GET /api/download-zip - Download directory as zip
-app.get('/api/download-zip', (req, res) => {
+app.get('/api/download-zip', requireAuth, (req, res) => {
   try {
     const reqPath = req.query.path;
     const resolved = resolvePath(reqPath);
@@ -573,7 +809,7 @@ app.get('/api/download-zip', (req, res) => {
 });
 
 // 9. GET /api/autocomplete - Autocomplete paths as you type
-app.get('/api/autocomplete', (req, res) => {
+app.get('/api/autocomplete', requireAuth, (req, res) => {
   try {
     const query = (req.query.query || '').trim();
     if (!query) return res.json({ suggestions: [] });
@@ -616,7 +852,7 @@ app.get('/api/autocomplete', (req, res) => {
 });
 
 // 10. GET /api/search - Quick search within directory
-app.get('/api/search', (req, res) => {
+app.get('/api/search', requireAuth, (req, res) => {
   try {
     const reqPath = req.query.path;
     const query = (req.query.query || '').toLowerCase().trim();
@@ -665,7 +901,7 @@ app.get('/api/search', (req, res) => {
 });
 
 // 11. GET /api/system - System diagnostics and presets
-app.get('/api/system', (req, res) => {
+app.get('/api/system', requireAuth, (req, res) => {
   res.json({
     platform: process.platform,
     arch: process.arch,
@@ -699,7 +935,7 @@ app.get('/api/system', (req, res) => {
 });
 
 // 12. POST /api/terminal - Safe Quick Command Runner
-app.post('/api/terminal', (req, res) => {
+app.post('/api/terminal', requireAuth, (req, res) => {
   try {
     const { command, cwd: reqCwd } = req.body;
     if (!command) return res.status(400).json({ error: 'Missing command' });

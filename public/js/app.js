@@ -1,6 +1,41 @@
+// Global Fetch Interceptor to attach Auth tokens and handle 401s
+(function () {
+  const originalFetch = window.fetch;
+  window.fetch = async function (...args) {
+    let [resource, config] = args;
+    config = config || {};
+    config.headers = config.headers || {};
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      if (config.headers instanceof Headers) {
+        if (!config.headers.has('Authorization')) {
+          config.headers.set('Authorization', `Bearer ${token}`);
+        }
+      } else if (Array.isArray(config.headers)) {
+        if (!config.headers.some(([k]) => k.toLowerCase() === 'authorization')) {
+          config.headers.push(['Authorization', `Bearer ${token}`]);
+        }
+      } else {
+        if (!config.headers['Authorization'] && !config.headers['authorization']) {
+          config.headers['Authorization'] = `Bearer ${token}`;
+        }
+      }
+    }
+
+    const response = await originalFetch(resource, config);
+    if (response.status === 401 && typeof resource === 'string' && resource.startsWith('/api/') && !resource.startsWith('/api/auth/')) {
+      if (window.App && typeof window.App.handleUnauthorized === 'function') {
+        window.App.handleUnauthorized();
+      }
+    }
+    return response;
+  };
+})();
+
 // Main Application Logic for ServerPath Explorer
 const App = {
-  currentPath: '/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/',
+  currentPath: '/home/subhan/Cloud-backend/',
   history: [],
   historyIndex: -1,
   items: [],
@@ -13,18 +48,355 @@ const App = {
   autocompleteTimeout: null,
 
   theme: 'light',
+  user: null,
+  authMode: 'login', // 'login' | 'activate' | 'reset'
+  showPassword: false,
 
   async init() {
     this.initTheme();
     Editor.init();
     this.loadBookmarks();
     this.setupEventListeners();
-    await this.fetchSystemInfo();
+    await this.initAuth();
+  },
 
-    // Check if initial path is in URL hash or default
-    const hashPath = window.location.hash.slice(1);
-    const initialPath = hashPath ? decodeURIComponent(hashPath) : this.currentPath;
-    await this.navigateTo(initialPath);
+  async initAuth() {
+    // Check URL parameters for token, errors, or invite/reset
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    if (urlToken) {
+      localStorage.setItem('token', urlToken);
+      document.cookie = `token=${urlToken}; path=/; max-age=2592000; SameSite=Lax`;
+      const cleanUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+
+    const invite = urlParams.get('invite');
+    if (invite) {
+      const inviteInput = document.getElementById('authInviteInput');
+      if (inviteInput) inviteInput.value = invite;
+      this.setAuthMode('activate');
+    }
+    const reset = urlParams.get('reset');
+    if (reset) {
+      this.setAuthMode('reset');
+    }
+    const errParam = urlParams.get('error');
+    if (errParam) {
+      this.showAuthError(decodeURIComponent(errParam));
+    }
+
+    const authenticated = await this.checkAuth();
+    if (authenticated) {
+      await this.fetchSystemInfo();
+      const hashPath = window.location.hash.slice(1);
+      const initialPath = hashPath ? decodeURIComponent(hashPath) : this.currentPath;
+      await this.navigateTo(initialPath);
+    }
+  },
+
+  async checkAuth() {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+          this.user = data.user;
+          this.updateAuthUI();
+          this.hideAuthGate();
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('Auth check error:', e);
+    }
+    this.user = null;
+    this.updateAuthUI();
+    this.showAuthGate();
+    return false;
+  },
+
+  updateAuthUI() {
+    const badge = document.getElementById('userHeaderBadge');
+    const headerLoginBtn = document.getElementById('btnHeaderLogin');
+    if (this.user) {
+      if (badge) badge.style.display = 'flex';
+      if (headerLoginBtn) headerLoginBtn.style.display = 'none';
+      this.renderUserBadge();
+    } else {
+      if (badge) badge.style.display = 'none';
+      if (headerLoginBtn) headerLoginBtn.style.display = 'inline-flex';
+    }
+  },
+
+  showAuthGate(errorMsg) {
+    const gate = document.getElementById('authGate');
+    if (gate) gate.style.display = 'flex';
+    this.updateAuthUI();
+    if (errorMsg) {
+      this.showAuthError(errorMsg);
+    }
+  },
+
+  hideAuthGate() {
+    const gate = document.getElementById('authGate');
+    if (gate) gate.style.display = 'none';
+    this.clearAuthMessages();
+  },
+
+  handleUnauthorized() {
+    this.user = null;
+    this.updateAuthUI();
+    this.showAuthGate('Your session has expired. Please sign in again.');
+  },
+
+  renderUserBadge() {
+    const badge = document.getElementById('userHeaderBadge');
+    const avatar = document.getElementById('userAvatarText');
+    const emailText = document.getElementById('userEmailText');
+    const roleBadge = document.getElementById('userRoleBadge');
+
+    if (!this.user || !badge) return;
+
+    badge.style.display = 'flex';
+    const email = this.user.email || 'user';
+    if (avatar) avatar.textContent = (this.user.name ? this.user.name[0] : email[0]).toUpperCase();
+    if (emailText) emailText.textContent = email;
+    if (roleBadge) {
+      roleBadge.textContent = this.user.role || 'user';
+      roleBadge.style.color = (this.user.role === 'admin' || this.user.role === 'super-admin') ? '#2563eb' : '#64748b';
+    }
+  },
+
+  setAuthMode(mode) {
+    this.authMode = mode;
+    this.clearAuthMessages();
+
+    const subtitle = document.getElementById('authSubtitle');
+    const title = document.getElementById('authTitle');
+    const nameGroup = document.getElementById('authNameGroup');
+    const pwdGroup = document.getElementById('authPasswordGroup');
+    const confirmPwdGroup = document.getElementById('authConfirmPasswordGroup');
+    const inviteGroup = document.getElementById('authInviteGroup');
+    const rememberRow = document.getElementById('authRememberRow');
+    const submitText = document.getElementById('authSubmitText');
+    const githubBtn = document.getElementById('authGithubBtn');
+    const switchPrompt = document.getElementById('authSwitchPrompt');
+    const switchBtn = document.getElementById('authSwitchBtn');
+
+    if (mode === 'login') {
+      if (subtitle) subtitle.textContent = 'Please enter your details';
+      if (title) title.textContent = 'Welcome back';
+      if (nameGroup) nameGroup.style.display = 'none';
+      if (pwdGroup) pwdGroup.style.display = 'block';
+      if (confirmPwdGroup) confirmPwdGroup.style.display = 'none';
+      if (inviteGroup) inviteGroup.style.display = 'none';
+      if (rememberRow) rememberRow.style.display = 'flex';
+      if (submitText) submitText.textContent = 'Sign in';
+      if (githubBtn) githubBtn.style.display = 'flex';
+      if (switchPrompt) switchPrompt.textContent = "Don't have an account?";
+      if (switchBtn) switchBtn.textContent = 'Sign up';
+    } else if (mode === 'activate') {
+      if (subtitle) subtitle.textContent = 'Start your journey';
+      if (title) title.textContent = 'Create an account';
+      if (nameGroup) nameGroup.style.display = 'block';
+      if (pwdGroup) pwdGroup.style.display = 'block';
+      if (confirmPwdGroup) confirmPwdGroup.style.display = 'block';
+      if (inviteGroup) inviteGroup.style.display = 'block';
+      if (rememberRow) rememberRow.style.display = 'none';
+      if (submitText) submitText.textContent = 'Sign up';
+      if (githubBtn) githubBtn.style.display = 'flex';
+      if (switchPrompt) switchPrompt.textContent = 'Already have an account?';
+      if (switchBtn) switchBtn.textContent = 'Sign in';
+    } else if (mode === 'reset') {
+      if (subtitle) subtitle.textContent = 'Password recovery';
+      if (title) title.textContent = 'Reset password';
+      if (nameGroup) nameGroup.style.display = 'none';
+      if (pwdGroup) pwdGroup.style.display = 'none';
+      if (confirmPwdGroup) confirmPwdGroup.style.display = 'none';
+      if (inviteGroup) inviteGroup.style.display = 'none';
+      if (rememberRow) rememberRow.style.display = 'none';
+      if (submitText) submitText.textContent = 'Send recovery link';
+      if (githubBtn) githubBtn.style.display = 'none';
+      if (switchPrompt) switchPrompt.textContent = 'Remember your password?';
+      if (switchBtn) switchBtn.textContent = 'Sign in';
+    }
+  },
+
+  toggleAuthMode() {
+    if (this.authMode === 'login') {
+      this.setAuthMode('activate');
+    } else {
+      this.setAuthMode('login');
+    }
+  },
+
+  togglePasswordVisibility() {
+    this.showPassword = !this.showPassword;
+    const pwdInput = document.getElementById('authPasswordInput');
+    const confirmPwdInput = document.getElementById('authConfirmPasswordInput');
+    const eyeIcon = document.getElementById('authEyeIcon');
+    const eyeOffIcon = document.getElementById('authEyeOffIcon');
+
+    const type = this.showPassword ? 'text' : 'password';
+    if (pwdInput) pwdInput.type = type;
+    if (confirmPwdInput) confirmPwdInput.type = type;
+
+    if (eyeIcon) eyeIcon.style.display = this.showPassword ? 'none' : 'block';
+    if (eyeOffIcon) eyeOffIcon.style.display = this.showPassword ? 'block' : 'none';
+  },
+
+  clearAuthMessages() {
+    const successAlert = document.getElementById('authSuccessAlert');
+    const errorAlert = document.getElementById('authErrorAlert');
+    const lockoutNotice = document.getElementById('authLockoutNotice');
+    if (successAlert) successAlert.style.display = 'none';
+    if (errorAlert) errorAlert.style.display = 'none';
+    if (lockoutNotice) lockoutNotice.style.display = 'none';
+  },
+
+  showAuthError(msg, lockoutMins) {
+    const errorAlert = document.getElementById('authErrorAlert');
+    const errorMsg = document.getElementById('authErrorMsg');
+    const lockoutNotice = document.getElementById('authLockoutNotice');
+    const lockoutSpan = document.getElementById('authLockoutMins');
+
+    if (errorMsg) errorMsg.textContent = msg;
+    if (errorAlert) errorAlert.style.display = 'flex';
+
+    if (lockoutMins && lockoutNotice && lockoutSpan) {
+      lockoutSpan.textContent = lockoutMins;
+      lockoutNotice.style.display = 'flex';
+    } else if (lockoutNotice) {
+      lockoutNotice.style.display = 'none';
+    }
+  },
+
+  showAuthSuccess(msg) {
+    const successAlert = document.getElementById('authSuccessAlert');
+    const successMsg = document.getElementById('authSuccessMsg');
+    if (successMsg) successMsg.textContent = msg;
+    if (successAlert) successAlert.style.display = 'flex';
+  },
+
+  async handleAuthSubmit(e) {
+    e.preventDefault();
+    this.clearAuthMessages();
+
+    const email = document.getElementById('authEmailInput')?.value.trim();
+    const password = document.getElementById('authPasswordInput')?.value || '';
+    const name = document.getElementById('authNameInput')?.value.trim();
+    const confirmPassword = document.getElementById('authConfirmPasswordInput')?.value || '';
+    const inviteToken = document.getElementById('authInviteInput')?.value.trim();
+    const rememberMe = document.getElementById('authRememberMe')?.checked ?? true;
+
+    if (!email) {
+      this.showAuthError('Please enter a valid email address.');
+      return;
+    }
+
+    if (this.authMode === 'activate') {
+      if (password.length < 8) {
+        this.showAuthError('Password must be at least 8 characters.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        this.showAuthError('Passwords do not match.');
+        return;
+      }
+    }
+
+    const submitBtn = document.getElementById('authSubmitBtn');
+    const spinner = document.getElementById('authSubmitSpinner');
+    const submitText = document.getElementById('authSubmitText');
+
+    if (submitBtn) submitBtn.disabled = true;
+    if (spinner) spinner.style.display = 'inline-block';
+
+    try {
+      if (this.authMode === 'login') {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, rememberMe })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to sign in.');
+        }
+
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24;
+          document.cookie = `token=${data.token}; path=/; max-age=${maxAge}; SameSite=Lax`;
+          if (data.profile?.role) {
+            document.cookie = `user_role=${data.profile.role}; path=/; max-age=${maxAge}; SameSite=Lax`;
+          }
+        }
+
+        this.user = data.profile || { email };
+        this.updateAuthUI();
+        this.hideAuthGate();
+        this.toast('Signed in successfully!', 'success');
+
+        // Initialize application content
+        await this.fetchSystemInfo();
+        const hashPath = window.location.hash.slice(1);
+        const initialPath = hashPath ? decodeURIComponent(hashPath) : this.currentPath;
+        await this.navigateTo(initialPath);
+
+      } else if (this.authMode === 'activate') {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name, inviteToken })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Registration failed.');
+        }
+
+        this.showAuthSuccess('Account created! You can now sign in.');
+        this.setAuthMode('login');
+
+      } else if (this.authMode === 'reset') {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Password reset request failed.');
+        }
+
+        this.showAuthSuccess(data.message || 'If an account exists with this email, a reset link has been sent.');
+        this.setAuthMode('login');
+      }
+    } catch (err) {
+      this.showAuthError(err.message || 'An unexpected error occurred.');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+      if (spinner) spinner.style.display = 'none';
+    }
+  },
+
+  async logout() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (_) { }
+
+    localStorage.removeItem('token');
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('user_email');
+    localStorage.removeItem('user_uid');
+    document.cookie = 'token=; max-age=0; path=/';
+    document.cookie = 'user_role=; max-age=0; path=/';
+
+    this.user = null;
+    this.updateAuthUI();
+    this.showAuthGate();
+    this.toast('You have signed out.', 'info');
   },
 
   setupEventListeners() {
@@ -350,7 +722,7 @@ const App = {
     if (!cleanQuery) {
       this.filteredItems = [...this.items];
     } else {
-      this.filteredItems = this.items.filter(item => 
+      this.filteredItems = this.items.filter(item =>
         item.name.toLowerCase().includes(cleanQuery) ||
         (item.extension && item.extension.toLowerCase().includes(cleanQuery))
       );
@@ -564,7 +936,7 @@ const App = {
         if (!res.ok) return;
         const data = await res.json();
         this.renderAutocomplete(data.suggestions || []);
-      } catch (e) {}
+      } catch (e) { }
     }, 150);
   },
 
