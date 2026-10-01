@@ -3,7 +3,7 @@ const Editor = {
   currentFile: null,
   isMarkdownPreview: true,
 
-  init() {
+  ensureElements() {
     this.drawer = document.getElementById('editorDrawer');
     this.titleEl = document.getElementById('editorFileName');
     this.pathEl = document.getElementById('editorFilePath');
@@ -12,15 +12,21 @@ const Editor = {
     this.downloadBtn = document.getElementById('editorDownloadBtn');
     this.closeBtn = document.getElementById('editorCloseBtn');
     this.footerStatsEl = document.getElementById('editorFooterStats');
+  },
+
+  init() {
+    this.ensureElements();
 
     // Event listeners
-    this.closeBtn.addEventListener('click', () => this.close());
-    this.drawer.addEventListener('click', (e) => {
-      if (e.target === this.drawer) this.close();
-    });
+    if (this.closeBtn) this.closeBtn.addEventListener('click', () => this.close());
+    if (this.drawer) {
+      this.drawer.addEventListener('click', (e) => {
+        if (e.target === this.drawer) this.close();
+      });
+    }
 
-    this.saveBtn.addEventListener('click', () => this.save());
-    this.downloadBtn.addEventListener('click', () => this.download());
+    if (this.saveBtn) this.saveBtn.addEventListener('click', () => this.save());
+    if (this.downloadBtn) this.downloadBtn.addEventListener('click', () => this.download());
 
     // Keyboard shortcut Ctrl+S
     window.addEventListener('keydown', (e) => {
@@ -35,19 +41,22 @@ const Editor = {
   },
 
   isOpen() {
-    return this.drawer.classList.contains('active');
+    return !!(this.drawer && this.drawer.classList.contains('active'));
   },
 
   async open(filePath) {
+    this.ensureElements();
     try {
-      this.drawer.classList.add('active');
-      this.titleEl.textContent = 'Loading...';
-      this.pathEl.textContent = filePath;
-      this.bodyEl.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8;gap:10px;">
-          <div class="status-dot animate-pulse"></div> Fetching file contents...
-        </div>
-      `;
+      if (this.drawer) this.drawer.classList.add('active');
+      if (this.titleEl) this.titleEl.textContent = 'Loading...';
+      if (this.pathEl) this.pathEl.textContent = filePath;
+      if (this.bodyEl) {
+        this.bodyEl.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#94a3b8;gap:10px;">
+            <div class="status-dot animate-pulse"></div> Fetching file contents...
+          </div>
+        `;
+      }
 
       const res = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
       if (!res.ok) {
@@ -86,9 +95,9 @@ const Editor = {
 
       this.currentFile = data;
 
-      this.titleEl.textContent = data.name;
-      this.pathEl.textContent = data.displayPath;
-      this.footerStatsEl.textContent = `${data.formattedSize || ''} ${data.lineCount ? '• ' + data.lineCount + ' lines • ' : ''}Modified: ${data.formattedDate || '-'}`;
+      if (this.titleEl) this.titleEl.textContent = data.name || '';
+      if (this.pathEl) this.pathEl.textContent = data.displayPath || '';
+      if (this.footerStatsEl) this.footerStatsEl.textContent = `${data.formattedSize || ''} ${data.lineCount ? '• ' + data.lineCount + ' lines • ' : ''}Modified: ${data.formattedDate || '-'}`;
 
       // Render based on category
       if (data.category === 'image') {
@@ -107,18 +116,23 @@ const Editor = {
         this.renderCode(data);
       }
     } catch (err) {
-      this.bodyEl.innerHTML = `
-        <div style="padding:40px;color:#fda4af;display:flex;flex-direction:column;gap:12px;">
-          <strong>Error reading file:</strong>
-          <div>${err.message}</div>
-        </div>
-      `;
-      App.toast('Error opening file: ' + err.message, 'error');
+      if (this.bodyEl) {
+        this.bodyEl.innerHTML = `
+          <div style="padding:40px;color:#fda4af;display:flex;flex-direction:column;gap:12px;">
+            <strong>Error reading file:</strong>
+            <div>${this.escapeHtml(err.message)}</div>
+          </div>
+        `;
+      }
+      if (window.App && typeof App.toast === 'function') {
+        App.toast('Error opening file: ' + err.message, 'error');
+      }
     }
   },
 
   renderCode(file) {
-    this.saveBtn.style.display = 'inline-flex';
+    if (this.saveBtn) this.saveBtn.style.display = 'inline-flex';
+    if (!this.bodyEl) return;
     this.bodyEl.innerHTML = `
       <div style="display:flex;height:100%;width:100%;">
         <textarea id="codeTextarea" class="code-textarea" spellcheck="false">${this.escapeHtml(file.content || '')}</textarea>
@@ -126,27 +140,32 @@ const Editor = {
     `;
 
     const textarea = document.getElementById('codeTextarea');
-    textarea.focus();
+    if (textarea) {
+      textarea.focus();
 
-    // Tab indentation support
-    textarea.addEventListener('keydown', function(e) {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const start = this.selectionStart;
-        const end = this.selectionEnd;
-        this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
-        this.selectionStart = this.selectionEnd = start + 2;
-      }
-    });
+      // Tab indentation support
+      textarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const start = this.selectionStart;
+          const end = this.selectionEnd;
+          this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+          this.selectionStart = this.selectionEnd = start + 2;
+        }
+      });
 
-    textarea.addEventListener('input', () => {
-      const lines = textarea.value.split('\n').length;
-      Editor.footerStatsEl.textContent = `${Editor.currentFile.formattedSize} • ${lines} lines (unsaved changes)`;
-    });
+      textarea.addEventListener('input', () => {
+        const lines = textarea.value.split('\n').length;
+        if (Editor.footerStatsEl) {
+          Editor.footerStatsEl.textContent = `${(Editor.currentFile && Editor.currentFile.formattedSize) || ''} • ${lines} lines (unsaved changes)`;
+        }
+      });
+    }
   },
 
   renderMarkdown(file) {
-    this.saveBtn.style.display = 'inline-flex';
+    if (this.saveBtn) this.saveBtn.style.display = 'inline-flex';
+    if (!this.bodyEl) return;
     this.bodyEl.innerHTML = `
       <div style="display:flex;flex-direction:column;height:100%;">
         <div style="padding:8px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);display:flex;gap:8px;">
@@ -167,37 +186,41 @@ const Editor = {
     const previewPane = document.getElementById('mdPreviewPane');
     const textarea = document.getElementById('codeTextarea');
 
-    previewBtn.classList.add('active');
+    if (previewBtn) previewBtn.classList.add('active');
 
-    previewBtn.addEventListener('click', () => {
-      previewBtn.classList.add('active');
-      editBtn.classList.remove('active');
-      previewPane.innerHTML = this.simpleMarkdownToHtml(textarea.value);
-      previewPane.style.display = 'block';
-      textarea.style.display = 'none';
-    });
+    if (previewBtn && editBtn && previewPane && textarea) {
+      previewBtn.addEventListener('click', () => {
+        previewBtn.classList.add('active');
+        editBtn.classList.remove('active');
+        previewPane.innerHTML = this.simpleMarkdownToHtml(textarea.value);
+        previewPane.style.display = 'block';
+        textarea.style.display = 'none';
+      });
 
-    editBtn.addEventListener('click', () => {
-      editBtn.classList.add('active');
-      previewBtn.classList.remove('active');
-      previewPane.style.display = 'none';
-      textarea.style.display = 'block';
-      textarea.focus();
-    });
+      editBtn.addEventListener('click', () => {
+        editBtn.classList.add('active');
+        previewBtn.classList.remove('active');
+        previewPane.style.display = 'none';
+        textarea.style.display = 'block';
+        textarea.focus();
+      });
+    }
   },
 
   renderImage(file) {
-    this.saveBtn.style.display = 'none';
+    if (this.saveBtn) this.saveBtn.style.display = 'none';
+    if (!this.bodyEl) return;
     const rawUrl = `/api/file?path=${encodeURIComponent(file.displayPath)}&raw=1&t=${Date.now()}`;
     this.bodyEl.innerHTML = `
       <div class="image-preview-container">
-        <img src="${rawUrl}" class="preview-media" alt="${file.name}" />
+        <img src="${rawUrl}" class="preview-media" alt="${this.escapeHtml(file.name || '')}" />
       </div>
     `;
   },
 
   renderVideo(file) {
-    this.saveBtn.style.display = 'none';
+    if (this.saveBtn) this.saveBtn.style.display = 'none';
+    if (!this.bodyEl) return;
     const rawUrl = `/api/file?path=${encodeURIComponent(file.displayPath)}&raw=1`;
     this.bodyEl.innerHTML = `
       <div class="image-preview-container">
@@ -207,7 +230,8 @@ const Editor = {
   },
 
   renderAudio(file) {
-    this.saveBtn.style.display = 'none';
+    if (this.saveBtn) this.saveBtn.style.display = 'none';
+    if (!this.bodyEl) return;
     const rawUrl = `/api/file?path=${encodeURIComponent(file.displayPath)}&raw=1`;
     this.bodyEl.innerHTML = `
       <div class="image-preview-container" style="flex-direction:column;gap:20px;">
@@ -218,7 +242,8 @@ const Editor = {
   },
 
   renderPdf(file) {
-    this.saveBtn.style.display = 'none';
+    if (this.saveBtn) this.saveBtn.style.display = 'none';
+    if (!this.bodyEl) return;
     const rawUrl = `/api/file?path=${encodeURIComponent(file.displayPath)}&raw=1`;
     this.bodyEl.innerHTML = `
       <iframe src="${rawUrl}" style="width:100%;height:100%;border:none;"></iframe>
@@ -226,12 +251,13 @@ const Editor = {
   },
 
   renderBinary(file) {
-    this.saveBtn.style.display = 'none';
+    if (this.saveBtn) this.saveBtn.style.display = 'none';
+    if (!this.bodyEl) return;
     this.bodyEl.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📦</div>
         <div class="empty-title">Binary File</div>
-        <div class="empty-desc">This is a compiled or binary file (${file.formattedSize}). Download to view or use on your system.</div>
+        <div class="empty-desc">This is a compiled or binary file (${file.formattedSize || ''}). Download to view or use on your system.</div>
         <button class="btn btn-primary" onclick="Editor.download()">Download File</button>
       </div>
     `;
@@ -243,8 +269,10 @@ const Editor = {
     if (!textarea) return;
 
     try {
-      this.saveBtn.disabled = true;
-      this.saveBtn.innerHTML = `Saving...`;
+      if (this.saveBtn) {
+        this.saveBtn.disabled = true;
+        this.saveBtn.innerHTML = `Saving...`;
+      }
 
       const res = await fetch('/api/file', {
         method: 'POST',
@@ -258,18 +286,26 @@ const Editor = {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save');
 
-      App.toast('File saved successfully! (' + data.formattedSize + ')', 'success');
+      if (window.App && typeof App.toast === 'function') {
+        App.toast('File saved successfully! (' + (data.formattedSize || '') + ')', 'success');
+      }
       this.currentFile.formattedSize = data.formattedSize;
       const lines = textarea.value.split('\n').length;
-      this.footerStatsEl.textContent = `${data.formattedSize} • ${lines} lines • Saved just now`;
+      if (this.footerStatsEl) {
+        this.footerStatsEl.textContent = `${data.formattedSize || ''} • ${lines} lines • Saved just now`;
+      }
     } catch (err) {
-      App.toast('Failed to save file: ' + err.message, 'error');
+      if (window.App && typeof App.toast === 'function') {
+        App.toast('Failed to save file: ' + err.message, 'error');
+      }
     } finally {
-      this.saveBtn.disabled = false;
-      this.saveBtn.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-        Save
-      `;
+      if (this.saveBtn) {
+        this.saveBtn.disabled = false;
+        this.saveBtn.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+          Save
+        `;
+      }
     }
   },
 
@@ -279,12 +315,13 @@ const Editor = {
   },
 
   close() {
-    this.drawer.classList.remove('active');
+    if (this.drawer) this.drawer.classList.remove('active');
     this.currentFile = null;
   },
 
   escapeHtml(str) {
-    return str
+    if (!str) return '';
+    return String(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
@@ -293,6 +330,7 @@ const Editor = {
   },
 
   simpleMarkdownToHtml(md) {
+    if (!md) return '';
     let html = this.escapeHtml(md);
     // Code blocks
     html = html.replace(/```([a-z0-9]*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');

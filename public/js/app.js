@@ -28,110 +28,106 @@ const App = {
   },
 
   setupEventListeners() {
-    const pathInput = document.getElementById('pathInput');
-    const pathGoBtn = document.getElementById('pathGoBtn');
-    const pathClearBtn = document.getElementById('pathClearBtn');
-    const backBtn = document.getElementById('btnNavBack');
-    const forwardBtn = document.getElementById('btnNavForward');
-    const upBtn = document.getElementById('btnNavUp');
-    const refreshBtn = document.getElementById('btnRefresh');
-    const filterInput = document.getElementById('searchFilterInput');
-    const newFolderBtn = document.getElementById('btnNewFolder');
-    const newFileBtn = document.getElementById('btnNewFile');
-    const uploadBtn = document.getElementById('btnUpload');
-    const uploadInput = document.getElementById('fileUploadInput');
-    const downloadZipBtn = document.getElementById('btnDownloadZip');
-    const terminalToggleBtn = document.getElementById('btnToggleTerminal');
-    const terminalCloseBtn = document.getElementById('terminalCloseBtn');
-    const terminalInput = document.getElementById('terminalInput');
-    const bookmarkBtn = document.getElementById('btnBookmark');
-    const copyPathBtn = document.getElementById('btnCopyPath');
+    const on = (id, event, fn) => {
+      const el = typeof id === 'string' ? document.getElementById(id) : id;
+      if (el) el.addEventListener(event, fn);
+    };
 
-    // Navigation buttons
-    pathGoBtn.addEventListener('click', () => this.navigateTo(pathInput.value));
-    pathInput.addEventListener('keydown', (e) => {
+    const pathInput = document.getElementById('pathInput');
+    const pathClearBtn = document.getElementById('pathClearBtn');
+    const uploadInput = document.getElementById('fileUploadInput');
+
+    on('pathGoBtn', 'click', () => {
+      if (pathInput) this.navigateTo(pathInput.value);
+    });
+
+    on(pathInput, 'keydown', (e) => {
       if (e.key === 'Enter') {
         this.hideAutocomplete();
         this.navigateTo(pathInput.value);
       }
     });
 
-    pathInput.addEventListener('input', () => {
-      pathClearBtn.style.display = pathInput.value ? 'flex' : 'none';
+    on(pathInput, 'input', () => {
+      if (pathClearBtn) pathClearBtn.style.display = pathInput.value ? 'flex' : 'none';
       this.handlePathAutocomplete(pathInput.value);
     });
 
-    pathClearBtn.addEventListener('click', () => {
-      pathInput.value = '';
-      pathClearBtn.style.display = 'none';
-      pathInput.focus();
+    on(pathClearBtn, 'click', () => {
+      if (pathInput) {
+        pathInput.value = '';
+        pathInput.focus();
+      }
+      if (pathClearBtn) pathClearBtn.style.display = 'none';
     });
 
     // Close autocomplete on outside click
     document.addEventListener('click', (e) => {
-      if (!e.target.closest('.path-input-group')) {
+      if (!e.target || !e.target.closest || !e.target.closest('.path-input-group')) {
         this.hideAutocomplete();
       }
     });
 
-    backBtn.addEventListener('click', () => this.navBack());
-    forwardBtn.addEventListener('click', () => this.navForward());
-    upBtn.addEventListener('click', () => this.navUp());
-    refreshBtn.addEventListener('click', () => this.navigateTo(this.currentPath, false));
+    on('btnNavBack', 'click', () => this.navBack());
+    on('btnNavForward', 'click', () => this.navForward());
+    on('btnNavUp', 'click', () => this.navUp());
+    on('btnRefresh', 'click', () => this.navigateTo(this.currentPath, false));
 
     // Copy current path
-    copyPathBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(this.currentPath);
-      this.toast('Path copied to clipboard!', 'info');
+    on('btnCopyPath', 'click', () => {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(this.currentPath);
+        this.toast('Path copied to clipboard!', 'info');
+      }
     });
 
     // Bookmark toggle
-    bookmarkBtn.addEventListener('click', () => this.toggleBookmark(this.currentPath));
+    on('btnBookmark', 'click', () => this.toggleBookmark(this.currentPath));
 
     // Live search filter
-    filterInput.addEventListener('input', (e) => {
+    on('searchFilterInput', 'input', (e) => {
       this.filterItems(e.target.value);
     });
 
     // View mode toggle
-    document.getElementById('viewTableBtn').addEventListener('click', () => this.setViewMode('table'));
-    document.getElementById('viewGridBtn').addEventListener('click', () => this.setViewMode('grid'));
+    on('viewTableBtn', 'click', () => this.setViewMode('table'));
+    on('viewGridBtn', 'click', () => this.setViewMode('grid'));
 
     // New Folder / File modals
-    newFolderBtn.addEventListener('click', () => this.openCreateModal('folder'));
-    newFileBtn.addEventListener('click', () => this.openCreateModal('file'));
+    on('btnNewFolder', 'click', () => this.openCreateModal('folder'));
+    on('btnNewFile', 'click', () => this.openCreateModal('file'));
 
     // Upload files
-    uploadBtn.addEventListener('click', () => uploadInput.click());
-    uploadInput.addEventListener('change', (e) => this.handleFileUpload(e.target.files));
+    on('btnUpload', 'click', () => {
+      if (uploadInput) uploadInput.click();
+    });
+    on(uploadInput, 'change', (e) => this.handleFileUpload(e.target.files));
 
     // Drag and Drop
     this.setupDragAndDrop();
 
     // Download ZIP
-    downloadZipBtn.addEventListener('click', () => {
+    on('btnDownloadZip', 'click', () => {
       window.location.href = `/api/download-zip?path=${encodeURIComponent(this.currentPath)}`;
       this.toast('Preparing ZIP archive download...', 'info');
     });
 
     // Terminal Drawer
-    terminalToggleBtn.addEventListener('click', () => this.toggleTerminal());
-    terminalCloseBtn.addEventListener('click', () => this.toggleTerminal(false));
-    terminalInput.addEventListener('keydown', (e) => {
+    on('btnToggleTerminal', 'click', () => this.toggleTerminal());
+    on('terminalCloseBtn', 'click', () => this.toggleTerminal(false));
+    const termInput = document.getElementById('terminalInput');
+    on(termInput, 'keydown', (e) => {
       if (e.key === 'Enter') {
-        const cmd = terminalInput.value.trim();
+        const cmd = termInput.value.trim();
         if (cmd) {
-          terminalInput.value = '';
+          termInput.value = '';
           this.runTerminalCommand(cmd);
         }
       }
     });
 
     // Theme toggle
-    const themeBtn = document.getElementById('btnThemeToggle');
-    if (themeBtn) {
-      themeBtn.addEventListener('click', () => this.toggleTheme());
-    }
+    on('btnThemeToggle', 'click', () => this.toggleTheme());
 
     // Table sorting headers
     document.querySelectorAll('.file-table th[data-sort]').forEach(th => {
@@ -216,12 +212,13 @@ const App = {
     const loadingState = document.getElementById('loadingState');
     const contentArea = document.getElementById('explorerContent');
 
-    pathInput.value = newPath;
-    document.getElementById('pathClearBtn').style.display = newPath ? 'flex' : 'none';
+    if (pathInput) pathInput.value = newPath;
+    const pathClearBtn = document.getElementById('pathClearBtn');
+    if (pathClearBtn) pathClearBtn.style.display = newPath ? 'flex' : 'none';
 
     try {
-      loadingState.style.display = 'flex';
-      contentArea.style.display = 'none';
+      if (loadingState) loadingState.style.display = 'flex';
+      if (contentArea) contentArea.style.display = 'none';
 
       const res = await fetch(`/api/browse?path=${encodeURIComponent(newPath)}`);
       const data = await res.json();
@@ -232,7 +229,7 @@ const App = {
         } else {
           this.toast(data.error || 'Failed to browse path', 'error');
         }
-        loadingState.style.display = 'none';
+        if (loadingState) loadingState.style.display = 'none';
         return;
       }
 
@@ -261,38 +258,52 @@ const App = {
       this.renderBreadcrumbs(data.breadcrumbs || []);
       this.items = data.items || [];
       this.applySort();
-      this.filterItems(document.getElementById('searchFilterInput').value);
+      const filterInput = document.getElementById('searchFilterInput');
+      this.filterItems(filterInput ? filterInput.value : '');
       this.updateBookmarkButton();
 
       // Update terminal prompt dir
-      document.getElementById('terminalPromptDir').textContent = this.currentPath;
+      const termPromptDir = document.getElementById('terminalPromptDir');
+      if (termPromptDir) termPromptDir.textContent = this.currentPath;
 
-      loadingState.style.display = 'none';
-      contentArea.style.display = 'block';
+      if (loadingState) loadingState.style.display = 'none';
+      if (contentArea) contentArea.style.display = 'block';
     } catch (err) {
-      loadingState.style.display = 'none';
+      if (loadingState) loadingState.style.display = 'none';
       this.toast('Error: ' + err.message, 'error');
     }
   },
 
   renderNotFoundState(targetPath, errorMsg) {
     const contentArea = document.getElementById('explorerContent');
-    contentArea.style.display = 'block';
-    contentArea.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon" style="color:#f43f5e;border-color:rgba(244,63,94,0.3);">⚠️</div>
-        <div class="empty-title">Path Not Found</div>
-        <div class="empty-desc">The path <code>${targetPath}</code> does not exist on this server.</div>
-        <div style="display:flex;gap:12px;margin-top:8px;">
-          <button class="btn btn-primary" onclick="App.createPathStructure('${targetPath}')">
+    const tableView = document.getElementById('tableView');
+    const gridView = document.getElementById('gridView');
+    const emptyState = document.getElementById('emptyState');
+    const notFoundState = document.getElementById('notFoundState');
+    const notFoundDesc = document.getElementById('notFoundDesc');
+    const notFoundActions = document.getElementById('notFoundActions');
+
+    if (contentArea) contentArea.style.display = 'block';
+    if (tableView) tableView.style.display = 'none';
+    if (gridView) gridView.style.display = 'none';
+    if (emptyState) emptyState.style.display = 'none';
+
+    if (notFoundState) {
+      notFoundState.style.display = 'flex';
+      if (notFoundDesc) {
+        notFoundDesc.innerHTML = `The path <code>${this.escapeHtml(targetPath)}</code> does not exist on this server.`;
+      }
+      if (notFoundActions) {
+        notFoundActions.innerHTML = `
+          <button class="btn btn-primary" onclick="App.createPathStructure('${this.escapeHtml(targetPath)}')">
             ✨ Create Folder at this Path
           </button>
           <button class="btn btn-secondary" onclick="App.navigateTo('/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/')">
             Go to Subdomain Example
           </button>
-        </div>
-      </div>
-    `;
+        `;
+      }
+    }
   },
 
   async createPathStructure(folderPath) {
@@ -348,7 +359,7 @@ const App = {
     const counter = document.getElementById('itemsCounter');
     const folderCount = this.filteredItems.filter(i => i.isDirectory).length;
     const fileCount = this.filteredItems.filter(i => i.isFile).length;
-    counter.textContent = `${folderCount} folders, ${fileCount} files`;
+    if (counter) counter.textContent = `${folderCount} folders, ${fileCount} files`;
 
     this.renderItems();
   },
@@ -380,29 +391,33 @@ const App = {
     const tableView = document.getElementById('tableView');
     const gridView = document.getElementById('gridView');
     const emptyState = document.getElementById('emptyState');
+    const notFoundState = document.getElementById('notFoundState');
+
+    if (notFoundState) notFoundState.style.display = 'none';
 
     if (this.filteredItems.length === 0) {
-      tableView.style.display = 'none';
-      gridView.style.display = 'none';
-      emptyState.style.display = 'flex';
+      if (tableView) tableView.style.display = 'none';
+      if (gridView) gridView.style.display = 'none';
+      if (emptyState) emptyState.style.display = 'flex';
       return;
     }
 
-    emptyState.style.display = 'none';
+    if (emptyState) emptyState.style.display = 'none';
 
     if (this.viewMode === 'table') {
-      tableView.style.display = 'block';
-      gridView.style.display = 'none';
+      if (tableView) tableView.style.display = 'block';
+      if (gridView) gridView.style.display = 'none';
       this.renderTable();
     } else {
-      tableView.style.display = 'none';
-      gridView.style.display = 'grid';
+      if (tableView) tableView.style.display = 'none';
+      if (gridView) gridView.style.display = 'grid';
       this.renderGrid();
     }
   },
 
   renderTable() {
     const tbody = document.getElementById('fileTableBody');
+    if (!tbody) return;
     let html = '';
 
     this.filteredItems.forEach(item => {
@@ -456,6 +471,7 @@ const App = {
 
   renderGrid() {
     const gridView = document.getElementById('gridView');
+    if (!gridView) return;
     let html = '';
 
     this.filteredItems.forEach(item => {
@@ -493,8 +509,10 @@ const App = {
 
   setViewMode(mode) {
     this.viewMode = mode;
-    document.getElementById('viewTableBtn').classList.toggle('active', mode === 'table');
-    document.getElementById('viewGridBtn').classList.toggle('active', mode === 'grid');
+    const tableBtn = document.getElementById('viewTableBtn');
+    const gridBtn = document.getElementById('viewGridBtn');
+    if (tableBtn) tableBtn.classList.toggle('active', mode === 'table');
+    if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
     this.renderItems();
   },
 
@@ -526,8 +544,10 @@ const App = {
   },
 
   updateNavButtons() {
-    document.getElementById('btnNavBack').disabled = this.historyIndex <= 0;
-    document.getElementById('btnNavForward').disabled = this.historyIndex >= this.history.length - 1;
+    const backBtn = document.getElementById('btnNavBack');
+    const forwardBtn = document.getElementById('btnNavForward');
+    if (backBtn) backBtn.disabled = this.historyIndex <= 0;
+    if (forwardBtn) forwardBtn.disabled = this.historyIndex >= this.history.length - 1;
   },
 
   // Autocomplete
@@ -550,6 +570,7 @@ const App = {
 
   renderAutocomplete(suggestions) {
     const dropdown = document.getElementById('autocompleteDropdown');
+    if (!dropdown) return;
     if (!suggestions || suggestions.length === 0) {
       dropdown.style.display = 'none';
       return;
@@ -570,13 +591,15 @@ const App = {
   },
 
   selectAutocomplete(fullPath) {
-    document.getElementById('pathInput').value = fullPath;
+    const input = document.getElementById('pathInput');
+    if (input) input.value = fullPath;
     this.hideAutocomplete();
     this.navigateTo(fullPath);
   },
 
   hideAutocomplete() {
-    document.getElementById('autocompleteDropdown').style.display = 'none';
+    const dropdown = document.getElementById('autocompleteDropdown');
+    if (dropdown) dropdown.style.display = 'none';
   },
 
   // Bookmarks
