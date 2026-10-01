@@ -6,7 +6,7 @@
   <title>ServerPath Explorer | Deep Server File & Directory Manager</title>
   <meta name="description" content="High-performance server file explorer and path navigator for browsing, viewing, editing, and managing server files and folders directly from your browser.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=1.2.0">
 </head>
 <body>
 
@@ -14,37 +14,42 @@
   <header class="app-header">
     <div class="header-container">
       <div class="brand" onclick="App.navigateTo('/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/')">
-        <div class="brand-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>
-            <polyline points="12 11 12 17"></polyline>
-            <polyline points="9 14 12 11 15 14"></polyline>
-          </svg>
+        <div class="brand-icon-wrapper">
+          <div class="brand-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>
+              <polyline points="12 11 12 17"></polyline>
+              <polyline points="9 14 12 11 15 14"></polyline>
+            </svg>
+          </div>
+          <span class="brand-status-dot online" id="brandStatusDot" title="Server Online"></span>
         </div>
-        <div style="display:flex;flex-direction:column;">
-          <div style="display:flex;align-items:center;gap:8px;">
+        <div class="brand-text-col">
+          <div class="brand-title-row">
             <span class="brand-title">ServerPath</span>
             <span class="brand-badge">EXPLORER</span>
           </div>
-          <span style="font-size:0.7rem;color:var(--text-muted);font-family:var(--font-mono);">Multi-Tenant & System Navigator</span>
+          <span class="brand-subtitle" style="font-size:0.7rem;color:var(--text-muted);font-family:var(--font-mono);">Multi-Tenant & System Navigator</span>
         </div>
       </div>
 
       <div class="header-actions">
+        <!-- Desktop status badge -->
         <div class="status-badge" id="headerServerStatus">
           <div class="status-dot"></div>
           <span id="headerServerBadge">Online • Node.js</span>
         </div>
 
         <!-- Theme Toggle Button -->
-        <button id="btnThemeToggle" class="btn btn-secondary" title="Switch Theme (Light / Dark)">
-          <svg id="themeIconSun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-          <svg id="themeIconMoon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        <button id="btnThemeToggle" class="btn btn-secondary header-icon-btn" title="Switch Theme (Light / Dark)">
+          <svg id="themeIconSun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg id="themeIconMoon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
           <span id="themeToggleText">Light</span>
         </button>
 
-        <button id="btnToggleTerminal" class="btn btn-secondary" title="Open Server Terminal">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+        <!-- Terminal Toggle Button -->
+        <button id="btnToggleTerminal" class="btn btn-secondary header-icon-btn" title="Open Server Terminal">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
           <span>Terminal</span>
         </button>
 
@@ -58,21 +63,43 @@
           <span>Sign in</span>
         </button>
 
-        <!-- User Profile & Logout -->
-        <div id="userHeaderBadge" class="user-header-badge" style="display:none;">
-          <div class="user-avatar" id="userAvatarText">U</div>
-          <div class="user-meta">
-            <span class="user-email" id="userEmailText">user@lootops.me</span>
-            <span class="user-role-badge" id="userRoleBadge">admin</span>
-          </div>
-          <button id="btnLogout" class="btn-logout" title="Sign out" onclick="App.logout()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-              <polyline points="16 17 21 12 16 7"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12"></line>
-            </svg>
-            <span>Sign out</span>
+        <!-- User Profile Dropdown Container -->
+        <div class="user-profile-container" id="userProfileContainer" style="display:none;">
+          <button id="userHeaderBadge" class="user-header-badge" title="User Profile" onclick="App.toggleUserMenu(event)">
+            <div class="user-avatar" id="userAvatarText">U</div>
+            <div class="user-meta">
+              <span class="user-email" id="userEmailText">user@lootops.me</span>
+              <span class="user-role-badge" id="userRoleBadge">admin</span>
+            </div>
+            <svg class="user-menu-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </button>
+
+          <!-- Dropdown Popover Menu -->
+          <div id="userMenuDropdown" class="user-menu-dropdown" style="display:none;">
+            <div class="user-menu-header">
+              <div class="user-menu-avatar" id="userMenuAvatar">U</div>
+              <div class="user-menu-details">
+                <span class="user-menu-email" id="userMenuEmail">user@lootops.me</span>
+                <span class="user-menu-role" id="userMenuRole">ADMIN</span>
+              </div>
+            </div>
+
+            <div class="user-menu-server-row">
+              <span class="status-dot"></span>
+              <span id="userMenuServerStatus" class="user-menu-server-text">Online • Linux</span>
+            </div>
+
+            <div class="user-menu-divider"></div>
+
+            <button type="button" class="user-menu-action-btn danger" onclick="App.logout()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                <polyline points="16 17 21 12 16 7"></polyline>
+                <line x1="21" y1="12" x2="9" y2="12"></line>
+              </svg>
+              <span>Sign out</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -94,6 +121,9 @@
         </button>
         <button id="btnNavUp" class="btn-icon" title="Up to Parent Directory">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"></path></svg>
+        </button>
+        <button id="btnRefresh" class="btn-icon" title="Reload Directory">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 21h5v-5"></path></svg>
         </button>
 
         <!-- Main Path Input Field -->
@@ -129,10 +159,6 @@
 
         <button id="btnBookmark" class="btn-icon" title="Bookmark This Path">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-        </button>
-
-        <button id="btnRefresh" class="btn-icon" title="Reload Directory">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 21h5v-5"></path></svg>
         </button>
       </div>
 
@@ -206,11 +232,11 @@
           <table class="file-table">
             <thead>
               <tr>
-                <th data-sort="name" style="cursor:pointer;">Name ↕</th>
-                <th data-sort="size" style="cursor:pointer;width:120px;">Size ↕</th>
-                <th data-sort="mtime" style="cursor:pointer;width:200px;">Modified ↕</th>
-                <th style="width:100px;">Perms</th>
-                <th style="width:160px;text-align:right;">Actions</th>
+                <th class="col-name" data-sort="name" style="cursor:pointer;">Name ↕</th>
+                <th class="col-size" data-sort="size" style="cursor:pointer;width:120px;">Size ↕</th>
+                <th class="col-mtime" data-sort="mtime" style="cursor:pointer;width:200px;">Modified ↕</th>
+                <th class="col-perms" style="width:100px;">Perms</th>
+                <th class="col-actions" style="width:160px;text-align:right;">Actions</th>
               </tr>
             </thead>
             <tbody id="fileTableBody"></tbody>
@@ -493,7 +519,7 @@
 
   <!-- Scripts -->
   <script src="js/icons.js"></script>
-  <script src="js/editor.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/editor.js?v=1.2.0"></script>
+  <script src="js/app.js?v=1.2.0"></script>
 </body>
 </html>

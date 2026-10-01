@@ -150,21 +150,55 @@ const App = {
     this.showAuthGate('Your session has expired. Please sign in again.');
   },
 
+  toggleUserMenu(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const dropdown = document.getElementById('userMenuDropdown');
+    if (!dropdown) return;
+    const isShowing = dropdown.style.display === 'block';
+    dropdown.style.display = isShowing ? 'none' : 'block';
+  },
+
+  closeUserMenu() {
+    const dropdown = document.getElementById('userMenuDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+  },
+
   renderUserBadge() {
+    const container = document.getElementById('userProfileContainer');
     const badge = document.getElementById('userHeaderBadge');
     const avatar = document.getElementById('userAvatarText');
     const emailText = document.getElementById('userEmailText');
     const roleBadge = document.getElementById('userRoleBadge');
 
-    if (!this.user || !badge) return;
+    const menuAvatar = document.getElementById('userMenuAvatar');
+    const menuEmail = document.getElementById('userMenuEmail');
+    const menuRole = document.getElementById('userMenuRole');
+    const menuStatus = document.getElementById('userMenuServerStatus');
+    const loginBtn = document.getElementById('btnHeaderLogin');
 
-    badge.style.display = 'flex';
+    if (!this.user) {
+      if (container) container.style.display = 'none';
+      if (loginBtn) loginBtn.style.display = 'inline-flex';
+      return;
+    }
+
+    if (container) container.style.display = 'flex';
+    if (loginBtn) loginBtn.style.display = 'none';
+
     const email = this.user.email || 'user';
-    if (avatar) avatar.textContent = (this.user.name ? this.user.name[0] : email[0]).toUpperCase();
+    const initial = (this.user.name ? this.user.name[0] : email[0]).toUpperCase();
+    if (avatar) avatar.textContent = initial;
     if (emailText) emailText.textContent = email;
     if (roleBadge) {
       roleBadge.textContent = this.user.role || 'user';
       roleBadge.style.color = (this.user.role === 'admin' || this.user.role === 'super-admin') ? '#2563eb' : '#64748b';
+    }
+
+    if (menuAvatar) menuAvatar.textContent = initial;
+    if (menuEmail) menuEmail.textContent = email;
+    if (menuRole) menuRole.textContent = (this.user.role || 'user').toUpperCase();
+    if (menuStatus && this.systemInfo) {
+      menuStatus.textContent = `Online • ${this.systemInfo.platform} • Node ${this.systemInfo.nodeVersion}`;
     }
   },
 
@@ -433,10 +467,13 @@ const App = {
       if (pathClearBtn) pathClearBtn.style.display = 'none';
     });
 
-    // Close autocomplete on outside click
+    // Close autocomplete and user menu on outside click
     document.addEventListener('click', (e) => {
       if (!e.target || !e.target.closest || !e.target.closest('.path-input-group')) {
         this.hideAutocomplete();
+      }
+      if (!e.target || !e.target.closest || !e.target.closest('#userProfileContainer')) {
+        this.closeUserMenu();
       }
     });
 
@@ -555,7 +592,12 @@ const App = {
       if (res.ok) {
         this.systemInfo = await res.json();
         this.renderPresets(this.systemInfo.presets || []);
-        document.getElementById('headerServerBadge').textContent = `${this.systemInfo.platform} • Node ${this.systemInfo.nodeVersion}`;
+        const badge = document.getElementById('headerServerBadge');
+        if (badge) badge.textContent = `${this.systemInfo.platform} • Node ${this.systemInfo.nodeVersion}`;
+        const menuStatus = document.getElementById('userMenuServerStatus');
+        if (menuStatus) menuStatus.textContent = `Online • ${this.systemInfo.platform} • Node ${this.systemInfo.nodeVersion}`;
+        const brandDot = document.getElementById('brandStatusDot');
+        if (brandDot) brandDot.className = 'brand-status-dot online';
       }
     } catch (e) {
       console.warn('System info error:', e);
@@ -798,18 +840,21 @@ const App = {
 
       html += `
         <tr class="file-row" onclick="App.handleItemClick('${item.displayPath.replace(/\\/g, '\\\\')}', ${item.isDirectory})">
-          <td>
+          <td class="col-name">
             <div class="file-name-cell">
               <div class="file-icon-box ${item.isDirectory ? 'folder-icon-box' : ''}">
                 ${iconSvg}
               </div>
-              <span style="${isSubdomain ? 'color:#818cf8;font-weight:700;' : ''}">${item.name}</span>
+              <div class="file-name-content">
+                <span class="file-name-text" style="${isSubdomain ? 'color:#818cf8;font-weight:700;' : ''}">${item.name}</span>
+                <span class="file-mobile-meta">${item.formattedDate}${item.formattedSize && item.formattedSize !== '-' ? ' • ' + item.formattedSize : ''}</span>
+              </div>
             </div>
           </td>
-          <td>${item.formattedSize}</td>
-          <td>${item.formattedDate}</td>
-          <td style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted);">${item.permissions || '-'}</td>
-          <td class="file-actions-cell" onclick="event.stopPropagation()">
+          <td class="col-size">${item.formattedSize}</td>
+          <td class="col-mtime">${item.formattedDate}</td>
+          <td class="col-perms" style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text-muted);">${item.permissions || '-'}</td>
+          <td class="col-actions file-actions-cell" onclick="event.stopPropagation()">
             <div class="file-quick-actions">
               ${!item.isDirectory ? `
                 <button class="action-btn-mini" title="Preview / Edit" onclick="Editor.open('${item.displayPath.replace(/\\/g, '\\\\')}')">
@@ -823,7 +868,7 @@ const App = {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 </button>
               `}
-              <button class="action-btn-mini" title="Copy Path" onclick="App.copyItemPath('${item.displayPath.replace(/\\/g, '\\\\')}')">
+              <button class="action-btn-mini action-btn-copy" title="Copy Path" onclick="App.copyItemPath('${item.displayPath.replace(/\\/g, '\\\\')}')">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
               </button>
               <button class="action-btn-mini" title="Rename" onclick="App.openRenameModal('${item.displayPath.replace(/\\/g, '\\\\')}', '${item.name}')">
