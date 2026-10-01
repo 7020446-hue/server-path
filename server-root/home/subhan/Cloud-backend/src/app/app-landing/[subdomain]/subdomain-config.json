@@ -1,0 +1,26 @@
+{
+  "tenantEngineVersion": "2.4.0",
+  "defaultSubdomain": "demo",
+  "supportedFeatures": [
+    "dynamic-dns",
+    "wildcard-ssl",
+    "custom-branding",
+    "analytics-telemetry"
+  ],
+  "cacheControl": {
+    "sMaxAge": 3600,
+    "staleWhileRevalidate": 86400
+  },
+  "routingRules": {
+    "enableCustomDomains": true,
+    "fallbackToRootOnNotFound": false,
+    "blockedSubdomains": [
+      "admin",
+      "api",
+      "auth",
+      "billing",
+      "system",
+      "internal"
+    ]
+  }
+}

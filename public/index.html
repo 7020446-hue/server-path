@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ServerPath Explorer | Deep Server File & Directory Manager</title>
+  <meta name="description" content="High-performance server file explorer and path navigator for browsing, viewing, editing, and managing server files and folders directly from your browser.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand" onclick="App.navigateTo('/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/')">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>
+            <polyline points="12 11 12 17"></polyline>
+            <polyline points="9 14 12 11 15 14"></polyline>
+          </svg>
+        </div>
+        <div style="display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="brand-title">ServerPath</span>
+            <span class="brand-badge">EXPLORER</span>
+          </div>
+          <span style="font-size:0.7rem;color:var(--text-muted);font-family:var(--font-mono);">Multi-Tenant & System Navigator</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="status-badge" id="headerServerStatus">
+          <div class="status-dot"></div>
+          <span id="headerServerBadge">Online • Node.js</span>
+        </div>
+
+        <!-- Theme Toggle Button -->
+        <button id="btnThemeToggle" class="btn btn-secondary" title="Switch Theme (Light / Dark)">
+          <svg id="themeIconSun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg id="themeIconMoon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          <span id="themeToggleText">Light</span>
+        </button>
+
+        <button id="btnToggleTerminal" class="btn btn-secondary" title="Open Server Terminal">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+          <span>Terminal</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="main-layout">
+
+    <!-- Path Hero Control Box -->
+    <section class="path-hero-panel">
+      <!-- Input & Navigation Row -->
+      <div class="path-input-group">
+        <!-- History Navigation -->
+        <button id="btnNavBack" class="btn-icon" title="Go Back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg>
+        </button>
+        <button id="btnNavForward" class="btn-icon" title="Go Forward">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"></path></svg>
+        </button>
+        <button id="btnNavUp" class="btn-icon" title="Up to Parent Directory">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"></path></svg>
+        </button>
+
+        <!-- Main Path Input Field -->
+        <div class="path-input-wrapper">
+          <div class="path-prefix-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+          </div>
+          <input 
+            type="text" 
+            id="pathInput" 
+            class="path-input" 
+            placeholder="Enter directory or file path (e.g. /home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/)"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="pathClearBtn" class="path-clear-btn" title="Clear input">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+          </button>
+
+          <!-- Autocomplete Dropdown -->
+          <div id="autocompleteDropdown" class="autocomplete-dropdown"></div>
+        </div>
+
+        <!-- Navigation Action Buttons -->
+        <button id="pathGoBtn" class="btn btn-primary" title="Jump to Path">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          <span>Open</span>
+        </button>
+
+        <button id="btnCopyPath" class="btn btn-secondary" title="Copy Current Path">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+        </button>
+
+        <button id="btnBookmark" class="btn-icon" title="Bookmark This Path">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        </button>
+
+        <button id="btnRefresh" class="btn-icon" title="Reload Directory">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 21h5v-5"></path></svg>
+        </button>
+      </div>
+
+      <!-- Clickable Breadcrumbs Chain -->
+      <div id="breadcrumbsBar" class="breadcrumbs-bar">
+        <span class="breadcrumb-label">Path:</span>
+      </div>
+
+      <!-- Quick Preset Paths -->
+      <div id="quickPresetsRow" class="quick-presets-row"></div>
+    </section>
+
+    <!-- Explorer Content Area -->
+    <section class="content-area">
+
+      <!-- Toolbar -->
+      <div class="explorer-toolbar">
+        <div class="toolbar-left">
+          <div class="search-filter-box">
+            <svg class="search-filter-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <input type="text" id="searchFilterInput" class="search-filter-input" placeholder="Filter files in this folder..." spellcheck="false" />
+          </div>
+          <span id="itemsCounter" class="items-counter">Loading items...</span>
+        </div>
+
+        <div class="toolbar-right">
+          <!-- View switcher -->
+          <div class="view-mode-group">
+            <button id="viewTableBtn" class="view-btn active" title="Details List View">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            </button>
+            <button id="viewGridBtn" class="view-btn" title="Grid / Card View">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg>
+            </button>
+          </div>
+
+          <!-- Actions -->
+          <button id="btnNewFile" class="btn btn-secondary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+            <span>New File</span>
+          </button>
+
+          <button id="btnNewFolder" class="btn btn-secondary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path><line x1="12" y1="10" x2="12" y2="16"></line><line x1="9" y1="13" x2="15" y2="13"></line></svg>
+            <span>New Folder</span>
+          </button>
+
+          <button id="btnUpload" class="btn btn-secondary">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <span>Upload</span>
+          </button>
+          <input type="file" id="fileUploadInput" multiple style="display:none;" />
+
+          <button id="btnDownloadZip" class="btn btn-secondary" title="Download folder as .ZIP">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>
+            <span>ZIP</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div id="loadingState" style="display:flex;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text-muted);">
+        <div class="status-dot animate-pulse"></div>
+        <span>Reading server directory...</span>
+      </div>
+
+      <!-- Main Explorer Container -->
+      <div id="explorerContent" style="display:none;">
+        <!-- Table View -->
+        <div id="tableView" class="file-table-wrapper">
+          <table class="file-table">
+            <thead>
+              <tr>
+                <th data-sort="name" style="cursor:pointer;">Name ↕</th>
+                <th data-sort="size" style="cursor:pointer;width:120px;">Size ↕</th>
+                <th data-sort="mtime" style="cursor:pointer;width:200px;">Modified ↕</th>
+                <th style="width:100px;">Perms</th>
+                <th style="width:160px;text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="fileTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Grid View -->
+        <div id="gridView" class="file-grid" style="display:none;"></div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state" style="display:none;">
+          <div class="empty-icon">📁</div>
+          <div class="empty-title">This folder is empty</div>
+          <div class="empty-desc">Create a new file, folder, or drag and drop files anywhere on the page to upload.</div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Drag and Drop Overlay -->
+  <div id="dropOverlay" class="drop-overlay">
+    <div style="font-size:3.5rem;">📥</div>
+    <div style="font-size:1.4rem;font-weight:700;color:white;">Drop files to upload</div>
+    <div style="font-size:0.9rem;color:var(--text-secondary);">Files will be uploaded directly to the active directory</div>
+  </div>
+
+  <!-- Slide-out File Editor / Media Viewer -->
+  <aside id="editorDrawer" class="editor-drawer">
+    <div class="editor-panel">
+      <header class="editor-header">
+        <div class="editor-file-info">
+          <div id="editorFileIcon" class="file-icon-box code-icon-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+          </div>
+          <div style="display:flex;flex-direction:column;overflow:hidden;">
+            <span id="editorFileName" class="editor-filename">filename.tsx</span>
+            <span id="editorFilePath" class="editor-filepath">/path/to/file</span>
+          </div>
+        </div>
+
+        <div class="editor-actions">
+          <button id="editorSaveBtn" class="btn btn-primary" title="Save Changes (Ctrl+S)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            <span>Save</span>
+          </button>
+          <button id="editorDownloadBtn" class="btn btn-secondary" title="Download File">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Download</span>
+          </button>
+          <button id="editorCloseBtn" class="btn-icon" title="Close (Esc)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="editorBody" class="editor-body"></div>
+
+      <footer class="editor-footer">
+        <span id="editorFooterStats">Ready</span>
+        <span>UTF-8 • Ctrl+S to save</span>
+      </footer>
+    </div>
+  </aside>
+
+  <!-- Terminal Drawer -->
+  <section id="terminalDrawer" class="terminal-drawer">
+    <div class="terminal-header">
+      <div class="terminal-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+        <span>Server Terminal — Executing in: <strong id="terminalPromptDir" style="color:white;">/</strong></span>
+      </div>
+      <button id="terminalCloseBtn" class="btn-icon" style="padding:4px;" title="Close Terminal">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div id="terminalBody" class="terminal-body">
+      <div style="color:var(--text-muted);font-size:0.8rem;">
+        Type commands to run directly in the current directory (e.g. <code>ls -la</code>, <code>git status</code>, <code>cat page.tsx</code>, <code>npm list</code>).
+      </div>
+      <div id="terminalOutput" class="terminal-output"></div>
+    </div>
+    <div class="terminal-input-row">
+      <span class="terminal-prompt">$</span>
+      <input type="text" id="terminalInput" class="terminal-input" placeholder="Enter shell command and press Enter..." spellcheck="false" autocomplete="off" />
+    </div>
+  </section>
+
+  <!-- Create Modal (File or Folder) -->
+  <div id="createModal" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="createModalTitle" class="modal-title">Create New Item</h3>
+        <button class="modal-close" onclick="document.getElementById('createModal').classList.remove('active')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:0.8rem;color:var(--text-muted);">
+          Destination: <code id="createModalTargetDir" style="color:#a5b4fc;word-break:break-all;"></code>
+        </div>
+        <div class="form-group">
+          <label id="createModalLabel" class="form-label">Name</label>
+          <input type="text" id="createModalInput" class="form-input" placeholder="e.g. middleware.ts or components" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="document.getElementById('createModal').classList.remove('active')">Cancel</button>
+        <button class="btn btn-primary" onclick="App.submitCreate()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename Modal -->
+  <div id="renameModal" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Rename Item</h3>
+        <button class="modal-close" onclick="document.getElementById('renameModal').classList.remove('active')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">New Name</label>
+          <input type="text" id="renameModalInput" class="form-input" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="document.getElementById('renameModal').classList.remove('active')">Cancel</button>
+        <button class="btn btn-primary" onclick="App.submitRename()">Rename</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Modal -->
+  <div id="deleteModal" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color:#fda4af;">Confirm Delete</h3>
+        <button class="modal-close" onclick="document.getElementById('deleteModal').classList.remove('active')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="deleteModalDesc" style="color:#cbd5e1;line-height:1.6;">Are you sure you want to delete this item?</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="document.getElementById('deleteModal').classList.remove('active')">Cancel</button>
+        <button class="btn btn-danger" onclick="App.submitDelete()">Delete Permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/icons.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
