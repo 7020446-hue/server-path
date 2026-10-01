@@ -51,15 +51,44 @@ const Editor = {
 
       const res = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`);
       if (!res.ok) {
-        throw new Error((await res.json()).error || 'Failed to open file');
+        let errMsg = 'Failed to open file';
+        try {
+          const errData = await res.json();
+          errMsg = errData.error || errMsg;
+        } catch(e) {
+          errMsg = await res.text() || errMsg;
+        }
+        throw new Error(errMsg);
       }
 
-      const data = await res.json();
+      let data;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        // Fallback if raw file was returned directly
+        const filename = filePath.split(/[/\\]/).pop();
+        const ext = filename.split('.').pop().toLowerCase();
+        let cat = 'binary';
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'].includes(ext)) cat = 'image';
+        else if (['mp4', 'webm', 'ogg', 'mov', 'mkv'].includes(ext)) cat = 'video';
+        else if (['mp3', 'wav', 'aac', 'flac', 'm4a'].includes(ext)) cat = 'audio';
+        else if (ext === 'pdf') cat = 'pdf';
+
+        data = {
+          name: filename,
+          displayPath: filePath,
+          category: cat,
+          formattedSize: res.headers.get('content-length') ? `${(parseInt(res.headers.get('content-length'), 10) / 1024).toFixed(1)} KB` : '',
+          formattedDate: res.headers.get('last-modified') || ''
+        };
+      }
+
       this.currentFile = data;
 
       this.titleEl.textContent = data.name;
       this.pathEl.textContent = data.displayPath;
-      this.footerStatsEl.textContent = `${data.formattedSize} • ${data.lineCount ? data.lineCount + ' lines • ' : ''}Modified: ${data.formattedDate || '-'}`;
+      this.footerStatsEl.textContent = `${data.formattedSize || ''} ${data.lineCount ? '• ' + data.lineCount + ' lines • ' : ''}Modified: ${data.formattedDate || '-'}`;
 
       // Render based on category
       if (data.category === 'image') {

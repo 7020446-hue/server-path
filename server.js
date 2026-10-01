@@ -344,13 +344,32 @@ app.get('/api/file', (req, res) => {
     if (req.query.download === '1') {
       return res.download(resolved.realPath, filename);
     }
-    if (req.query.raw === '1' || category === 'image' || category === 'video' || category === 'audio' || category === 'pdf') {
+    if (req.query.raw === '1') {
       res.setHeader('Content-Type', detectedMime);
       return res.sendFile(resolved.realPath);
     }
 
-    // Text / Code inspection
+    // Text / Code inspection & Metadata
     const stats = fs.statSync(resolved.realPath);
+
+    // Media & Documents return JSON metadata for the viewer
+    if (category === 'image' || category === 'video' || category === 'audio' || category === 'pdf') {
+      return res.json({
+        name: filename,
+        displayPath: resolved.displayPath,
+        realPath: resolved.realPath,
+        size: stats.size,
+        formattedSize: formatBytes(stats.size),
+        mtime: stats.mtime,
+        formattedDate: new Date(stats.mtime).toLocaleString(),
+        extension: ext.replace(/^\./, ''),
+        category: category,
+        mimeType: detectedMime,
+        isBinary: true,
+        content: null
+      });
+    }
+
     // If file is too large (> 10MB) return notice
     if (stats.size > 10 * 1024 * 1024) {
       return res.json({
@@ -370,7 +389,7 @@ app.get('/api/file', (req, res) => {
     // Check if buffer contains null bytes (binary)
     const isBinary = rawBuffer.slice(0, 1024).includes(0);
 
-    if (isBinary && category !== 'image') {
+    if (isBinary) {
       return res.json({
         name: filename,
         displayPath: resolved.displayPath,
