@@ -1,0 +1,21 @@
+[Unit]
+Description=ServerPath Explorer Daemon
+Documentation=https://github.com/Subhan-Haider/ServerPath-Explorer
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/serverpath-explorer
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=serverpath-explorer
+Environment=NODE_ENV=production
+Environment=PORT=4000
+Environment=HOST=0.0.0.0
+
+[Install]
+WantedBy=multi-user.target

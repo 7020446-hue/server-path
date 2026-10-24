@@ -1,63 +1,127 @@
 # ServerPath Explorer ⚡
 
-A high-performance server directory navigator, file manager, and in-browser code editor designed for cloud servers, local development, and multi-tenant architectures.
+A high-performance server directory navigator, file manager, and in-browser code editor designed for cloud servers, local development, VPS, and multi-tenant architectures.
 
-Allows you to enter and navigate server paths such as:
-```
-/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/
-```
-or any system drive (`C:\Users\...`, `~`, `/`, etc.) to view, open, edit, create, upload, and download files and folders.
+Allows you to enter and navigate server paths such as `/`, `/var/www`, `~`, or any system drive (`C:\Users\...`, etc.) to view, open, edit, create, upload, and download files and folders.
 
 ---
 
-## 🚀 Quick Start
+## 🌐 Deploy to Any Server
 
-### 1. Install Dependencies
+ServerPath Explorer is designed to run seamlessly in any environment:
+
+### Option 1: Docker & Docker Compose (Recommended for Any Server)
+
+Deploy in 1 command with Docker:
+
+```bash
+docker compose up -d
+```
+
+This starts ServerPath Explorer on port `4000` with volume access to your host filesystem.
+
+To build manually:
+```bash
+docker build -t serverpath-explorer .
+docker run -d -p 4000:4000 -v /:/explorer-root serverpath-explorer
+```
+
+---
+
+### Option 2: Automated Linux Deployment (Ubuntu / Debian / CentOS / AlmaLinux)
+
+Run the included deployment script directly on your server:
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+The script will automatically:
+1. Verify and install Node.js 20 LTS if missing
+2. Generate `.env` configuration
+3. Install production dependencies
+4. Start the service with PM2 or as a daemon
+
+---
+
+### Option 3: Node.js with PM2 (Production VPS)
+
+```bash
+# 1. Install dependencies
+npm install --omit=dev
+
+# 2. Configure environment
+cp .env.example .env
+
+# 3. Start with PM2
+npm install -g pm2
+pm2 start ecosystem.config.js --env production
+pm2 save
+pm2 startup
+```
+
+---
+
+### Option 4: Linux Systemd Service
+
+Copy the included service file:
+
+```bash
+sudo cp serverpath.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now serverpath
+```
+
+---
+
+### Option 5: Local & Quick Start
+
 ```bash
 npm install
-```
-
-### 2. Start the Server
-```bash
 npm start
 ```
-The application will launch at:
-```
-http://localhost:4000
-```
+The application will launch at `http://localhost:4000`.
 
-> **Note on Custom Server Port Configuration**:
-> When deployed to container platforms or Cloud-Backend, the server dynamically binds to `process.env.PORT` and `0.0.0.0`. You can test a custom port anytime:
-> ```bash
-> PORT=8080 npm start
-> ```
+---
+
+## ⚙️ Environment Configuration (`.env`)
+
+Configure your server behavior by creating a `.env` file (see [`.env.example`](file:///.env.example)):
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `4000` | HTTP port the server listens on |
+| `HOST` | `0.0.0.0` | Bind host address (`0.0.0.0` for all interfaces) |
+| `DEFAULT_PATH` | Current Directory / Root | Default folder path shown when opening the explorer |
+| `EXPLORER_ROOT` | *(Unrestricted)* | Optional root folder to jail exploration to |
+| `REQUIRE_AUTH` | `true` | Set to `false` to disable the login gate (for private LAN/homelab) |
+| `ADMIN_USER` | `admin` | Local administrator username |
+| `ADMIN_PASSWORD` | `admin2009` | Local administrator password |
+| `ADMIN_EMAIL` | `admin@lootops.me` | Admin email address |
+| `AUTH_SERVER_URL` | `https://server.lootops.me` | Optional external SSO server URL |
+| `CREATE_SAMPLE_DATA` | `false` in prod | Set to `true` to generate demo subdomain files |
 
 ---
 
 ## 🌟 Key Features
 
 ### 1. Smart Path Navigator & Autocomplete
-- **Universal Path Support**: Seamlessly browse Linux paths (like `/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/`), Windows drives (`C:\...`), user home (`~`), and relative directories.
-- **Dynamic Autocomplete**: As you type into the path bar, real-time directory suggestions appear. Press <kbd>Enter</kbd> or click to jump immediately.
-- **Interactive Breadcrumb Chain**: Click on any segment in `/` > `home` > `subhan` > `Cloud-backend` > `src` > `app` > `app-landing` > `[subdomain]` to jump directly to that directory level.
-- **Quick Path Presets**: 1-click shortcuts for Multi-Tenant Subdomain routes, Project Roots, User Home, and Workspaces.
-- **Bookmarks & Path Copy**: Star favorite paths and copy paths to the clipboard with one click.
+- **Universal Path Support**: Seamlessly browse Linux paths (`/`, `/var/www`, `/home/...`), Windows drives (`C:\...`), user home (`~`), and relative directories.
+- **Dynamic Autocomplete**: Real-time directory suggestions as you type.
+- **Interactive Breadcrumb Chain**: Click on any segment in the breadcrumb path to jump directly to that directory level.
+- **Quick Path Presets**: 1-click shortcuts for Workspace, Home, System Root/Drives, and Custom routes.
+- **Bookmarks & Path Copy**: Star favorite paths and copy paths to clipboard.
 
 ### 2. Dual Themes (Light & Dark Mode)
-- **Default Light Theme**: Clean, high-contrast palette with crisp slate cards (`#ffffff` / `#f8fafc`) and dark typography (`#0f172a`).
+- **Default Light Theme**: High-contrast palette with crisp slate cards.
 - **Dark Glassmorphism Theme**: Obsidian dark mode with glowing indigo/cyan accents.
-- **Theme Toggle**: Switch between Light and Dark mode with 1 click using the toggle button in the header (preference is saved automatically in `localStorage`).
+- Preference is saved automatically in `localStorage`.
 
 ### 3. File Explorer & Management
-- **Dual View Modes**: Switch between high-density **Details Table View** (sortable by Name, Size, Modified Date, Permissions) and **Card/Grid View**.
-- **Instant Search Filter**: Filter files and directories in real time as you type.
-- **File & Folder Operations**:
-  - 📄 **New File**: Create files with any extension.
-  - 📁 **New Folder**: Create nested directories.
-  - ✏️ **Rename**: Rename any file or folder with immediate validation.
-  - 🗑️ **Delete**: Safely delete files or folders.
-  - 📦 **Download Folder as ZIP**: 1-click download of entire directories compressed on the fly.
-  - 📥 **Drag-and-Drop Upload**: Drop files anywhere onto the window to upload directly to the active directory.
+- **Dual View Modes**: Switch between **Details Table View** (sortable by Name, Size, Modified Date, Permissions) and **Card/Grid View**.
+- **Instant Search Filter**: Filter files and directories in real time.
+- **File & Folder Operations**: New File, New Folder, Rename, Delete, Download Folder as ZIP, Drag-and-Drop Upload.
 
 ### 4. In-Browser Editor & Media Inspector
 - **Code & Text Editor**: Slide-out code editor with line counts, tab indentations, and instant save (<kbd>Ctrl</kbd>+<kbd>S</kbd>).
@@ -66,36 +130,6 @@ http://localhost:4000
 
 ### 5. Integrated Server Terminal Drawer
 - Run commands like `ls -la`, `git status`, `npm list`, or `cat <filename>` directly inside the active directory from the browser.
-
----
-
-## ⚙️ Custom Server Requirements (Cloud-Backend)
-
-If your framework uses a custom server script (like `server.ts` or `server.cjs`), you **must** configure it to listen on `process.env.PORT` and `0.0.0.0`:
-
-```typescript
-// server.ts
-import { createServer } from 'http';
-import { parse } from 'url';
-import next from 'next';
-
-const dev = process.env.NODE_ENV !== 'production';
-const hostname = process.env.HOSTNAME || '0.0.0.0';
-// Avoid hardcoding ports like 3000 to prevent 502 Bad Gateway errors
-const port = parseInt(process.env.PORT || '3000', 10);
-
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
-
-app.prepare().then(() => {
-  createServer((req, res) => {
-    const parsedUrl = parse(req.url!, true);
-    handle(req, res, parsedUrl);
-  }).listen(port, hostname, () => {
-    console.log(`> Ready on http://${hostname}:${port}`);
-  });
-});
-```
 
 ---
 
@@ -115,19 +149,26 @@ app.prepare().then(() => {
 | `/api/search?path=...&query=...` | `GET` | Deep recursive file search inside a folder |
 | `/api/terminal` | `POST` | Execute safe terminal command in directory (`{ command, cwd }`) |
 | `/api/system` | `GET` | Server diagnostics, platform info, and presets |
+| `/api/auth/login` | `POST` | Authenticate user with local admin or SSO credentials |
+| `/api/auth/me` | `GET` | Check current session authentication status |
+| `/api/auth/logout` | `POST` | Clear active authentication session |
 
 ---
 
 ## 📂 Project Structure
 
 ```
-server path/
-├── README.md               # Main project documentation
+├── Dockerfile              # Multi-platform container definition
+├── docker-compose.yml      # 1-click Docker deployment
+├── ecosystem.config.js     # PM2 production configuration
+├── serverpath.service      # Linux systemd service unit
+├── deploy.sh               # Automated Linux deployment script
+├── .env.example            # Environment variables template
 ├── package.json            # Node.js dependencies and scripts
 ├── server.js               # Express API and static file server
 ├── sample-data.js          # Multi-tenant sample data generator
 ├── public/                 # Client Single Page Application (SPA)
-│   ├── index.html          # Explorer HTML interface with theme support
+│   ├── index.html          # Explorer HTML interface
 │   ├── css/
 │   │   └── style.css       # Design system (Light & Dark modes)
 │   └── js/
@@ -135,16 +176,4 @@ server path/
 │       ├── editor.js       # Code editor, markdown preview, media player
 │       └── icons.js        # SVG file format icons dictionary
 └── server-root/            # Simulated root directory for testing
-    └── home/subhan/Cloud-backend/
-        ├── README.md
-        ├── package.json
-        ├── server.ts
-        ├── server.cjs
-        └── src/app/app-landing/[subdomain]/
-            ├── page.tsx
-            ├── layout.tsx
-            ├── route.ts
-            ├── types.ts
-            ├── subdomain-config.json
-            └── styles.css
 ```

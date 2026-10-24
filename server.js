@@ -1,3 +1,7 @@
+try {
+  require('dotenv').config();
+} catch (e) {}
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -20,11 +24,16 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Ensure sample directory structure exists
-try {
-  createSampleData(__dirname);
-} catch (e) {
-  console.warn('Could not create sample data:', e.message);
+// Ensure sample directory structure exists if enabled or in development
+const shouldCreateSample = process.env.CREATE_SAMPLE_DATA === 'true' || 
+  (process.env.NODE_ENV !== 'production' && !process.env.DEFAULT_PATH && !process.env.EXPLORER_ROOT);
+
+if (shouldCreateSample) {
+  try {
+    createSampleData(__dirname);
+  } catch (e) {
+    console.warn('Could not create sample data:', e.message);
+  }
 }
 
 // Multer storage for uploads
@@ -33,16 +42,24 @@ const storage = multer.diskStorage({
     const targetDir = req.query.targetDir || req.body.targetDir;
     const resolved = resolvePath(targetDir || os.homedir());
     if (resolved.exists && resolved.isDirectory) {
-      cb(null, resolved.realPath);
+      try {
+        fs.accessSync(resolved.realPath, fs.constants.W_OK);
+        cb(null, resolved.realPath);
+      } catch (permErr) {
+        cb(permErr);
+      }
     } else {
-      cb(new Error('Target directory not found'));
+      cb(new Error(`Target directory "${targetDir || ''}" not found`));
     }
   },
   filename: function (req, file, cb) {
     cb(null, file.originalname);
   }
 });
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 250 * 1024 * 1024 } // 250MB limit
+});
 
 // Helper: Format bytes to human readable
 function formatBytes(bytes, decimals = 1) {
@@ -101,6 +118,21 @@ function getWindowsDrives() {
 }
 
 /**
+ * Get the initial default path based on server configuration and environment
+ */
+function getDefaultPath() {
+  if (process.env.DEFAULT_PATH) return process.env.DEFAULT_PATH;
+  if (process.env.EXPLORER_ROOT) return process.env.EXPLORER_ROOT;
+  // If simulated server-root exists (e.g. dev/demo mode)
+  const samplePath = path.join(__dirname, 'server-root', 'home', 'subhan', 'Cloud-backend', 'src', 'app', 'app-landing', '[subdomain]');
+  if (fs.existsSync(samplePath)) {
+    return '/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/';
+  }
+  // Otherwise default to current working directory or system root
+  return process.cwd().replace(/\\/g, '/');
+}
+
+/**
  * Universal Path Resolver:
  * Handles POSIX paths (/home/subhan/...), Windows paths (C:\Users\...),
  * relative paths, and simulated server-root paths.
@@ -108,7 +140,7 @@ function getWindowsDrives() {
 function resolvePath(inputPath) {
   let cleanInput = (inputPath || '').trim();
   if (!cleanInput) {
-    cleanInput = '/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/';
+    cleanInput = getDefaultPath();
   }
 
   // Handle tilde ~
@@ -218,7 +250,11 @@ function resolvePath(inputPath) {
   };
 }
 
-// --- Authentication Module & Middleware (server.lootops.me SSO & Local) ---
+// --- Authentication Module & Middleware (Configurable Local & SSO) ---
+const REQUIRE_AUTH = process.env.REQUIRE_AUTH !== 'false';
+const ADMIN_USER = (process.env.ADMIN_USER || 'admin').trim();
+const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || 'admin2009').trim();
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@lootops.me').trim();
 const AUTH_SERVER_URL = process.env.AUTH_SERVER_URL || 'https://server.lootops.me';
 const tokenCache = new Map(); // token -> { user, expiresAt }
 
@@ -249,8 +285,8 @@ async function verifyToken(token) {
   if (token.startsWith('local_admin_')) {
     const adminUser = {
       uid: 'admin',
-      email: 'admin@lootops.me',
-      name: 'Administrator',
+      email: ADMIN_EMAIL,
+      name: ADMIN_USER || 'Administrator',
       role: 'super_admin',
       permissions: { canUpload: true, canDelete: true, canDownload: true }
     };
@@ -293,6 +329,17 @@ async function verifyToken(token) {
 
 // Auth Middleware: requires valid session token
 async function requireAuth(req, res, next) {
+  if (!REQUIRE_AUTH) {
+    req.user = {
+      uid: 'local_admin',
+      name: ADMIN_USER || 'Administrator',
+      email: ADMIN_EMAIL,
+      role: 'super_admin',
+      permissions: { canUpload: true, canDelete: true, canDownload: true }
+    };
+    return next();
+  }
+
   const token = extractToken(req);
   if (!token) {
     return res.status(401).json({
@@ -313,7 +360,7 @@ async function requireAuth(req, res, next) {
   next();
 }
 
-// 0. Auth Endpoints (same system as https://server.lootops.me)
+// 0. Auth Endpoints
 
 // POST /api/auth/login
 app.post('/api/auth/login', async (req, res) => {
@@ -324,14 +371,24 @@ app.post('/api/auth/login', async (req, res) => {
 
   const cleanEmail = email.trim();
 
-  // 1. Check local emergency fallback credentials if offline or local admin
-  const knownAdmins = ['admin@lootops.me', 'admin', 'setupg98@gmail.com', 'setupg98', 'support@subhan.tech'];
-  if (knownAdmins.includes(cleanEmail.toLowerCase()) && (password === 'admin2009' || password === 'admin')) {
+  // 1. Check local credentials (configured via env or default known admins)
+  const knownAdmins = [
+    ADMIN_USER.toLowerCase(),
+    ADMIN_EMAIL.toLowerCase(),
+    'admin@lootops.me',
+    'admin',
+    'setupg98@gmail.com',
+    'setupg98',
+    'support@subhan.tech'
+  ];
+  const knownPasswords = [ADMIN_PASSWORD, 'admin2009', 'admin'];
+
+  if (knownAdmins.includes(cleanEmail.toLowerCase()) && knownPasswords.includes(password)) {
     const localToken = 'local_admin_' + Buffer.from(cleanEmail + ':' + Date.now()).toString('base64');
     const profile = {
       uid: cleanEmail,
-      email: cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@lootops.me`,
-      name: cleanEmail.split('@')[0],
+      email: cleanEmail.includes('@') ? cleanEmail : ADMIN_EMAIL,
+      name: cleanEmail.split('@')[0] || ADMIN_USER,
       role: 'super_admin'
     };
     tokenCache.set(localToken, { user: profile, expiresAt: Date.now() + (rememberMe ? 2592000000 : 86400000) });
@@ -344,7 +401,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
   }
 
-  // 2. Authenticate against server.lootops.me / Cloud-backend
+  // 2. Authenticate against auth server if configured
   const authEndpoints = [
     `${AUTH_SERVER_URL}/auth/login`,
     'http://127.0.0.1:5000/auth/login',
@@ -395,6 +452,19 @@ app.post('/api/auth/login', async (req, res) => {
 
 // GET /api/auth/me
 app.get('/api/auth/me', async (req, res) => {
+  if (!REQUIRE_AUTH) {
+    return res.json({
+      authenticated: true,
+      authDisabled: true,
+      user: {
+        uid: 'local_admin',
+        name: ADMIN_USER || 'Administrator',
+        email: ADMIN_EMAIL,
+        role: 'super_admin'
+      }
+    });
+  }
+
   const token = extractToken(req);
   if (!token) {
     return res.json({ authenticated: false });
@@ -457,7 +527,7 @@ app.get('/api/github/login', (req, res) => {
 // 1. GET /api/browse?path=...
 app.get('/api/browse', requireAuth, (req, res) => {
   try {
-    const reqPath = req.query.path || '/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/';
+    const reqPath = req.query.path || getDefaultPath();
     const resolved = resolvePath(reqPath);
 
     if (!resolved.exists) {
@@ -481,7 +551,21 @@ app.get('/api/browse', requireAuth, (req, res) => {
     }
 
     // Read directory
-    const dirEntries = fs.readdirSync(resolved.realPath, { withFileTypes: true });
+    let dirEntries = [];
+    try {
+      dirEntries = fs.readdirSync(resolved.realPath, { withFileTypes: true });
+    } catch (err) {
+      if (err.code === 'EACCES' || err.code === 'EPERM') {
+        return res.status(403).json({
+          error: `Permission denied: "${reqPath}". The server process does not have permission to read this directory. Run with appropriate permissions or sudo.`,
+          code: 'EACCES',
+          displayPath: resolved.displayPath,
+          breadcrumbs: resolved.breadcrumbs,
+          parentPath: resolved.parentPath
+        });
+      }
+      throw err;
+    }
     const items = [];
 
     for (const entry of dirEntries) {
@@ -552,7 +636,7 @@ app.get('/api/browse', requireAuth, (req, res) => {
       items: items,
       systemRoots: getWindowsDrives(),
       platform: process.platform,
-      defaultSamplePath: '/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/'
+      defaultSamplePath: getDefaultPath()
     });
   } catch (error) {
     console.error('Error browsing path:', error);
@@ -663,6 +747,14 @@ app.get('/api/file', requireAuth, (req, res) => {
   }
 });
 
+// Helper: Format filesystem errors with user-friendly actionable guidance
+function formatFsError(err, targetPath = '') {
+  if (err.code === 'EACCES' || err.code === 'EPERM') {
+    return `Permission denied: "${targetPath || ''}". The server process does not have write permissions in this folder. To write to system root or protected directories, run the server with Administrator / root privileges, or create files inside your user folder (~) or project directory.`;
+  }
+  return err.message;
+}
+
 // 3. POST /api/file - Save file content
 app.post('/api/file', requireAuth, (req, res) => {
   try {
@@ -688,7 +780,8 @@ app.post('/api/file', requireAuth, (req, res) => {
     });
   } catch (error) {
     console.error('Error saving file:', error);
-    res.status(500).json({ error: error.message });
+    const isPerm = error.code === 'EACCES' || error.code === 'EPERM';
+    res.status(isPerm ? 403 : 500).json({ error: formatFsError(error, req.body?.path) });
   }
 });
 
@@ -720,7 +813,8 @@ app.post('/api/create', requireAuth, (req, res) => {
     });
   } catch (error) {
     console.error('Error creating item:', error);
-    res.status(500).json({ error: error.message });
+    const isPerm = error.code === 'EACCES' || error.code === 'EPERM';
+    res.status(isPerm ? 403 : 500).json({ error: formatFsError(error, path.join(req.body?.parentPath || '', req.body?.name || '')) });
   }
 });
 
@@ -744,7 +838,8 @@ app.post('/api/rename', requireAuth, (req, res) => {
     res.json({ success: true, message: `Renamed to ${newName}` });
   } catch (error) {
     console.error('Error renaming:', error);
-    res.status(500).json({ error: error.message });
+    const isPerm = error.code === 'EACCES' || error.code === 'EPERM';
+    res.status(isPerm ? 403 : 500).json({ error: formatFsError(error, req.body?.newName) });
   }
 });
 
@@ -766,45 +861,116 @@ app.post('/api/delete', requireAuth, (req, res) => {
     res.json({ success: true, message: 'Item deleted successfully' });
   } catch (error) {
     console.error('Error deleting:', error);
-    res.status(500).json({ error: error.message });
+    const isPerm = error.code === 'EACCES' || error.code === 'EPERM';
+    res.status(isPerm ? 403 : 500).json({ error: formatFsError(error, req.body?.path) });
   }
 });
 
 // 7. POST /api/upload - Handle file upload
-app.post('/api/upload', requireAuth, upload.array('files'), (req, res) => {
-  try {
+app.post('/api/upload', requireAuth, (req, res) => {
+  upload.array('files')(req, res, (err) => {
+    if (err) {
+      console.error('Upload error:', err);
+      const isPerm = err.code === 'EACCES' || err.code === 'EPERM';
+      const targetDir = req.query.targetDir || req.body.targetDir || '';
+      return res.status(isPerm ? 403 : 400).json({
+        error: formatFsError(err, targetDir) || err.message
+      });
+    }
+
     const count = req.files ? req.files.length : 0;
     res.json({
       success: true,
       message: `${count} file(s) uploaded successfully`,
       files: req.files ? req.files.map(f => f.originalname) : []
     });
-  } catch (error) {
-    console.error('Error uploading:', error);
-    res.status(500).json({ error: error.message });
-  }
+  });
 });
 
 // 8. GET /api/download-zip - Download directory as zip
 app.get('/api/download-zip', requireAuth, (req, res) => {
   try {
     const reqPath = req.query.path;
+    if (!reqPath) return res.status(400).json({ error: 'Missing path parameter' });
+
     const resolved = resolvePath(reqPath);
     if (!resolved.exists || !resolved.isDirectory) {
       return res.status(404).json({ error: 'Directory not found' });
     }
 
+    // Verify read access to the base directory
+    try {
+      fs.accessSync(resolved.realPath, fs.constants.R_OK);
+    } catch (permErr) {
+      return res.status(403).json({
+        error: `Permission denied: Cannot read directory "${reqPath}". Check permissions or run server with sudo/root.`,
+        code: 'EACCES'
+      });
+    }
+
     const folderName = path.basename(resolved.realPath) || 'archive';
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${folderName}.zip"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(folderName)}.zip"`);
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = archiver('zip', {
+      zlib: { level: 5 } // Fast compression with low CPU overhead
+    });
+
+    archive.on('warning', (err) => {
+      console.warn('Archiver warning (skipping entry):', err.message);
+    });
+
+    archive.on('error', (err) => {
+      console.error('Archiver error:', err);
+      if (!res.headersSent) {
+        const isPerm = err.code === 'EACCES' || err.code === 'EPERM';
+        res.status(isPerm ? 403 : 500).json({
+          error: formatFsError(err, reqPath) || err.message
+        });
+      } else {
+        res.end();
+      }
+    });
+
+    // Safely walk and add files, skipping any unreadable or locked files without crashing the zip stream
+    function safeAddDirectory(dirPath, archivePrefix = '') {
+      let entries = [];
+      try {
+        entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      } catch (e) {
+        console.warn(`Cannot read subdirectory "${dirPath}":`, e.message);
+        return;
+      }
+
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        const archivePath = archivePrefix ? `${archivePrefix}/${entry.name}` : entry.name;
+
+        try {
+          if (entry.isDirectory()) {
+            safeAddDirectory(fullPath, archivePath);
+          } else if (entry.isFile()) {
+            // Verify readability before adding stream
+            fs.accessSync(fullPath, fs.constants.R_OK);
+            archive.file(fullPath, { name: archivePath });
+          }
+        } catch (fileErr) {
+          console.warn(`Skipping unreadable file "${fullPath}":`, fileErr.message);
+        }
+      }
+    }
+
     archive.pipe(res);
-    archive.directory(resolved.realPath, false);
+    safeAddDirectory(resolved.realPath, '');
     archive.finalize();
   } catch (error) {
-    console.error('Error archiving zip:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error initiating zip archive:', error);
+    if (!res.headersSent) {
+      const isPerm = error.code === 'EACCES' || error.code === 'EPERM';
+      res.status(isPerm ? 403 : 500).json({
+        error: formatFsError(error, req.query?.path) || error.message
+      });
+    }
   }
 });
 
@@ -902,35 +1068,56 @@ app.get('/api/search', requireAuth, (req, res) => {
 
 // 11. GET /api/system - System diagnostics and presets
 app.get('/api/system', requireAuth, (req, res) => {
+  const defaultPath = getDefaultPath();
+  const presets = [
+    {
+      name: "Current Workspace",
+      path: process.cwd().replace(/\\/g, '/'),
+      tag: "Workspace"
+    },
+    {
+      name: "Home Directory (~)",
+      path: os.homedir().replace(/\\/g, '/'),
+      tag: "User Home"
+    }
+  ];
+
+  if (process.platform === 'win32') {
+    getWindowsDrives().forEach(d => {
+      presets.push({
+        name: `Drive (${d})`,
+        path: d.replace(/\\/g, '/'),
+        tag: "System Drive"
+      });
+    });
+  } else {
+    presets.push({
+      name: "System Root (/)",
+      path: "/",
+      tag: "Root"
+    });
+  }
+
+  // If Cloud-backend sample exists, add it to presets
+  const sampleRoot = path.join(__dirname, 'server-root');
+  if (fs.existsSync(sampleRoot)) {
+    presets.unshift({
+      name: "Multi-Tenant Dynamic Subdomain Route",
+      path: "/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/",
+      tag: "Demo / Sample"
+    });
+  }
+
   res.json({
     platform: process.platform,
     arch: process.arch,
     nodeVersion: process.version,
     homeDir: os.homedir().replace(/\\/g, '/'),
     cwd: process.cwd().replace(/\\/g, '/'),
+    defaultPath: defaultPath,
     drives: getWindowsDrives(),
-    presets: [
-      {
-        name: "Multi-Tenant Dynamic Subdomain Route",
-        path: "/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/",
-        tag: "Next.js App Router"
-      },
-      {
-        name: "Cloud-Backend Root",
-        path: "/home/subhan/Cloud-backend/",
-        tag: "Project Root"
-      },
-      {
-        name: "Home Directory (~)",
-        path: os.homedir().replace(/\\/g, '/'),
-        tag: "User Home"
-      },
-      {
-        name: "Current Web Workspace",
-        path: process.cwd().replace(/\\/g, '/'),
-        tag: "Workspace"
-      }
-    ]
+    authDisabled: !REQUIRE_AUTH,
+    presets
   });
 });
 
@@ -962,6 +1149,22 @@ app.post('/api/terminal', requireAuth, (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// Global JSON error handler for all /api endpoints (guarantees JSON response instead of HTML)
+app.use('/api', (err, req, res, next) => {
+  console.error('API Error handler:', err);
+  const isPerm = err.code === 'EACCES' || err.code === 'EPERM';
+  const status = isPerm ? 403 : (err.status || err.statusCode || 500);
+  res.status(status).json({
+    error: formatFsError(err, req.query?.targetDir || req.body?.targetDir || req.path) || err.message,
+    code: err.code || 'API_ERROR'
+  });
+});
+
+// Explicit favicon route
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'favicon.ico'));
 });
 
 // Explicit root route

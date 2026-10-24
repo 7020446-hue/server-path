@@ -1,0 +1,23 @@
+services:
+  serverpath-explorer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: serverpath-explorer
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4000}:4000"
+    environment:
+      - PORT=4000
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - REQUIRE_AUTH=${REQUIRE_AUTH:-true}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin2009}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@lootops.me}
+      - DEFAULT_PATH=${DEFAULT_PATH:-/explorer-root}
+      - CREATE_SAMPLE_DATA=false
+    volumes:
+      # Mount host directory to explore inside the container
+      # By default mounts host root (or customize to /var/www, /home, etc.)
+      - ${HOST_EXPLORE_PATH:-/}:/explorer-root:rw

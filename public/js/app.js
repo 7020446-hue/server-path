@@ -35,7 +35,7 @@
 
 // Main Application Logic for ServerPath Explorer
 const App = {
-  currentPath: '/home/subhan/Cloud-backend/',
+  currentPath: '/',
   history: [],
   historyIndex: -1,
   items: [],
@@ -90,7 +90,7 @@ const App = {
     if (authenticated) {
       await this.fetchSystemInfo();
       const hashPath = window.location.hash.slice(1);
-      const initialPath = hashPath ? decodeURIComponent(hashPath) : this.currentPath;
+      const initialPath = hashPath ? decodeURIComponent(hashPath) : (this.systemInfo?.defaultPath || this.currentPath);
       await this.navigateTo(initialPath);
     }
   },
@@ -517,8 +517,7 @@ const App = {
 
     // Download ZIP
     on('btnDownloadZip', 'click', () => {
-      window.location.href = `/api/download-zip?path=${encodeURIComponent(this.currentPath)}`;
-      this.toast('Preparing ZIP archive download...', 'info');
+      this.downloadFolderAsZip(this.currentPath);
     });
 
     // Terminal Drawer
@@ -591,6 +590,12 @@ const App = {
       const res = await fetch('/api/system');
       if (res.ok) {
         this.systemInfo = await res.json();
+        if (this.systemInfo.defaultPath && (!this.currentPath || this.currentPath === '/')) {
+          this.currentPath = this.systemInfo.defaultPath;
+        }
+        if (!this.bookmarks || !this.bookmarks.length) {
+          this.bookmarks = [this.systemInfo.defaultPath || '/'];
+        }
         this.renderPresets(this.systemInfo.presets || []);
         const badge = document.getElementById('headerServerBadge');
         if (badge) badge.textContent = `${this.systemInfo.platform} • Node ${this.systemInfo.nodeVersion}`;
@@ -602,6 +607,31 @@ const App = {
     } catch (e) {
       console.warn('System info error:', e);
     }
+  },
+
+  navigateToHome() {
+    const homePath = this.systemInfo?.defaultPath || this.systemInfo?.cwd || '/';
+    this.navigateTo(homePath);
+  },
+
+  downloadFolderAsZip(folderPath) {
+    const target = folderPath || this.currentPath;
+    const token = localStorage.getItem('token');
+    let url = `/api/download-zip?path=${encodeURIComponent(target)}`;
+    if (token) {
+      url += `&token=${encodeURIComponent(token)}`;
+    }
+    this.toast('Preparing ZIP archive download...', 'info');
+    window.location.href = url;
+  },
+
+  downloadFile(filePath) {
+    const token = localStorage.getItem('token');
+    let url = `/api/file?path=${encodeURIComponent(filePath)}&download=1`;
+    if (token) {
+      url += `&token=${encodeURIComponent(token)}`;
+    }
+    window.location.href = url;
   },
 
   renderPresets(presets) {
@@ -712,8 +742,8 @@ const App = {
           <button class="btn btn-primary" onclick="App.createPathStructure('${this.escapeHtml(targetPath)}')">
             ✨ Create Folder at this Path
           </button>
-          <button class="btn btn-secondary" onclick="App.navigateTo('/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/')">
-            Go to Subdomain Example
+          <button class="btn btn-secondary" onclick="App.navigateToHome()">
+            Go to Server Root
           </button>
         `;
       }
@@ -860,11 +890,11 @@ const App = {
                 <button class="action-btn-mini" title="Preview / Edit" onclick="Editor.open('${item.displayPath.replace(/\\/g, '\\\\')}')">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 </button>
-                <button class="action-btn-mini" title="Download" onclick="window.location.href='/api/file?path=${encodeURIComponent(item.displayPath)}&download=1'">
+                <button class="action-btn-mini" title="Download" onclick="App.downloadFile('${item.displayPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 </button>
               ` : `
-                <button class="action-btn-mini" title="Download as ZIP" onclick="window.location.href='/api/download-zip?path=${encodeURIComponent(item.displayPath)}'">
+                <button class="action-btn-mini" title="Download as ZIP" onclick="App.downloadFolderAsZip('${item.displayPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 </button>
               `}
@@ -1023,12 +1053,12 @@ const App = {
   loadBookmarks() {
     try {
       const saved = localStorage.getItem('server_path_bookmarks');
-      this.bookmarks = saved ? JSON.parse(saved) : [
-        '/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/'
-      ];
-    } catch (e) {
-      this.bookmarks = ['/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/'];
-    }
+      if (saved) {
+        this.bookmarks = JSON.parse(saved);
+        return;
+      }
+    } catch (e) {}
+    this.bookmarks = [];
   },
 
   saveBookmarks() {
@@ -1111,7 +1141,16 @@ const App = {
         body: formData
       });
 
-      const data = await res.json();
+      let data = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const rawText = await res.text();
+        const cleanMsg = rawText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        throw new Error(cleanMsg || `Upload failed (Status ${res.status})`);
+      }
+
       if (!res.ok) throw new Error(data.error || 'Upload failed');
 
       this.toast(data.message, 'success');

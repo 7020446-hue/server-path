@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4338ca"/>
+    </linearGradient>
+    <linearGradient id="folderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0e7ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background container -->
+  <rect width="64" height="64" rx="14" fill="url(#bgGrad)" />
+
+  <!-- Inner subtle border glow -->
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="none" stroke="#818cf8" stroke-width="1.5" stroke-opacity="0.4"/>
+
+  <!-- Folder Icon with Upload Arrow -->
+  <g filter="url(#shadow)" transform="translate(10, 10)">
+    <!-- Folder shape -->
+    <path d="M4 36h36a4 4 0 0 0 4-4V14a4 4 0 0 0-4-4h-14.5a3 3 0 0 1-2.5-1.3l-1.5-2.2A3 3 0 0 0 19 5H4a4 4 0 0 0-4 4v23a4 4 0 0 0 4 4Z" 
+          fill="none" 
+          stroke="url(#folderGrad)" 
+          stroke-width="3.2" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+    
+    <!-- Central Up/Down server path arrow -->
+    <line x1="22" y1="20" x2="22" y2="30" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+    <polyline points="17 25 22 20 27 25" fill="none" stroke="#38bdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ServerPath Explorer | Deep Server File & Directory Manager</title>
   <meta name="description" content="High-performance server file explorer and path navigator for browsing, viewing, editing, and managing server files and folders directly from your browser.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="alternate icon" href="/favicon.ico">
   <link rel="stylesheet" href="css/style.css?v=1.2.0">
 </head>
 <body>
@@ -13,7 +14,7 @@
   <!-- App Header -->
   <header class="app-header">
     <div class="header-container">
-      <div class="brand" onclick="App.navigateTo('/home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/')">
+      <div class="brand" onclick="App.navigateToHome()" title="Go to Server Home / Root">
         <div class="brand-icon-wrapper">
           <div class="brand-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -135,7 +136,7 @@
             type="text" 
             id="pathInput" 
             class="path-input" 
-            placeholder="Enter directory or file path (e.g. /home/subhan/Cloud-backend/src/app/app-landing/[subdomain]/)"
+            placeholder="Enter server path (e.g. /, /var/www, ~, or C:\...)"
             autocomplete="off"
             spellcheck="false"
           />
