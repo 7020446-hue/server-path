@@ -24,9 +24,9 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Serve frontend static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Ensure sample directory structure exists if enabled or in development
-const shouldCreateSample = process.env.CREATE_SAMPLE_DATA === 'true' || 
-  (process.env.NODE_ENV !== 'production' && !process.env.DEFAULT_PATH && !process.env.EXPLORER_ROOT);
+// Ensure sample directory structure exists if enabled or in development (skip in serverless Vercel)
+const shouldCreateSample = !process.env.VERCEL && (process.env.CREATE_SAMPLE_DATA === 'true' || 
+  (process.env.NODE_ENV !== 'production' && !process.env.DEFAULT_PATH && !process.env.EXPLORER_ROOT));
 
 if (shouldCreateSample) {
   try {
@@ -1164,16 +1164,24 @@ app.use('/api', (err, req, res, next) => {
 
 // Explicit favicon route
 app.get('/favicon.ico', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'favicon.ico'));
+  const icoPath = path.join(__dirname, 'public', 'favicon.ico');
+  if (fs.existsSync(icoPath)) {
+    return res.sendFile(icoPath);
+  }
+  res.status(204).end();
 });
 
 // Explicit root route
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  res.send('ServerPath Explorer is running');
 });
 
-// Start Server
-if (require.main === module || !process.env.VERCEL) {
+// Start Server locally or on VPS/container (skip on Vercel serverless)
+if (!process.env.VERCEL && require.main === module) {
   app.listen(PORT, HOST, () => {
     console.log(`ServerPath Explorer running on http://${HOST}:${PORT} (process.env.PORT=${process.env.PORT || 'default 4000'})`);
   });
